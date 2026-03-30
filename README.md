@@ -35,7 +35,7 @@ Authorization: Bearer <token>
   - query params: `disciplina`
 - `GET /questions/{question_id}`
 
-## Observa��es
+## Observações
 
 - A tabela padrão é `questoes` (configurável em `QUESTION_TABLE`).
 - Campos sensíveis como `gabarito` não são retornados nas respostas.
