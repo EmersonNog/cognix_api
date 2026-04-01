@@ -97,4 +97,5 @@ def upsert_attempt(
         'question_id': question_id,
         'selected_letter': selected_letter,
         'is_correct': is_correct,
+        'correct_letter': correct_letter,
     }
