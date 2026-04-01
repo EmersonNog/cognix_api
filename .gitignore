@@ -1,8 +1,14 @@
 .env
-*.json
+
 *.log
 *.db
 
 *.pyc
 __pycache__/
 **/__pycache__/
+
+secrets/*
+!secrets/.gitkeep
+
+backups/*
+!backups/.gitkeep

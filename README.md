@@ -1,4 +1,4 @@
-# Cognix API
+﻿# Cognix API
 
 Backend FastAPI da plataforma Cognix. Esta API concentra autenticacao com Firebase, leitura da base de questoes, registro de tentativas, persistencia de sessoes de treino e geracao de resumos personalizados com IA.
 
@@ -60,20 +60,65 @@ Isso permite:
 - marcar um simulado como concluido
 - compartilhar esse estado entre dispositivos com a mesma conta
 
-## Configuracao
+## Docker
+
+Fluxo recomendado apos clonar o projeto:
 
 1. Copie `.env.example` para `.env`
-2. Ajuste as variaveis necessarias
-3. Instale as dependencias:
+2. Ajuste a `.env` para o ambiente Docker
+3. Se usar Firebase, coloque o arquivo de credenciais em `./secrets/firebase-service-account.json`
+4. Se a base de questoes nao existir no banco Docker, coloque o backup em `./backups/cognix.backup`
+5. Suba os containers:
 
 ```bash
-pip install -r requirements.txt
+docker compose up -d --build
 ```
 
-4. Rode a API:
+6. Restaure a base:
+
+```powershell
+.\scripts\restore_db.ps1
+```
+
+7. Valide a API:
+
+- `http://localhost:8000/health`
+- `http://localhost:8000/docs`
+
+Configuracao recomendada da `.env` para Docker:
+
+```env
+DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/cognix
+POSTGRES_DB=cognix
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_PORT=5432
+API_PORT=8000
+QUESTION_TABLE=questions
+USERS_TABLE=users
+ALLOWED_ORIGINS=["*"]
+FIREBASE_CREDENTIALS=/app/secrets/firebase-service-account.json
+GEMINI_API_KEY=coloque_sua_chave_aqui
+GEMINI_MODEL=gemini-3-flash-preview
+```
+
+Observacoes:
+
+- no `DATABASE_URL`, use `db:5432`, nao `localhost`
+- `POSTGRES_PORT` controla a porta exposta na sua maquina
+- dentro da rede Docker, a API sempre acessa o banco por `db:5432`
+- o backend ignora variaveis extras do `compose`, como `POSTGRES_DB` e `API_PORT`
+- as tabelas internas sao criadas no startup, mas a tabela `questions` precisa vir do backup da base
+- as pastas `backups/` e `secrets/` podem ir para o repositório vazias com `.gitkeep`, mas o conteudo real nao deve subir
+
+Comandos uteis:
 
 ```bash
-python -m uvicorn app.main:app --reload
+docker compose up --build
+docker compose logs -f api
+docker compose logs -f db
+docker compose down
+docker compose down -v
 ```
 
 ## Variaveis principais
@@ -128,151 +173,12 @@ Padrao atual:
 
 Isso foi feito para evitar deslocamentos de horario entre banco, backend e app Flutter.
 
-## Endpoints
+## Documentacao da API
 
-### Sistema
+Para detalhes das rotas, payloads e respostas, use o Swagger da aplicacao:
 
-- `GET /health`
-
-### Usuarios
-
-- `POST /users/sync`
-
-### Questoes
-
-- `GET /questions`
-  - query params: `limit`, `offset`, `subject`, `subcategory`, `year`, `search`, `include_total`
-- `GET /questions/disciplines`
-- `GET /questions/subcategories`
-  - query params: `discipline`
-- `GET /questions/by_ids`
-  - query params: `ids`
-- `GET /questions/{question_id}`
-
-Observacoes:
-
-- o campo sensivel `gabarito` nao e retornado
-- a tabela de questoes e refletida dinamicamente a partir de `QUESTION_TABLE`
-- a reflexao da tabela foi cacheada para evitar custo repetido por request
-
-### Tentativas
-
-- `POST /attempts`
-
-Responsabilidades:
-
-- salvar resposta escolhida pelo usuario
-- persistir `is_correct`
-- registrar `discipline` e `subcategory`
-- atualizar indicadores usados por progresso e resumos
-
-### Sessoes de treino
-
-- `POST /sessions`
-- `GET /sessions`
-- `DELETE /sessions`
-- `GET /sessions/overview`
-
-#### `POST /sessions`
-
-Salva ou atualiza a sessao do usuario para uma subcategoria.
-
-Payload esperado:
-
-```json
-{
-  "discipline": "Linguagens, codigos e suas tecnologias",
-  "subcategory": "Lingua Estrangeira",
-  "state": {
-    "currentIndex": 3,
-    "questionIds": [10, 20, 30],
-    "lastSubmitted": {"10": "A"},
-    "elapsedSeconds": 182
-  }
-}
-```
-
-#### `GET /sessions`
-
-Retorna a sessao persistida de uma subcategoria para o usuario autenticado.
-
-#### `DELETE /sessions`
-
-Limpa a sessao persistida da subcategoria.
-
-#### `GET /sessions/overview`
-
-Retorna um agregado para alimentar o app com dados reais do usuario:
-
-- `completed_sessions`
-- `in_progress_sessions`
-- `latest_session`
-
-`latest_session` inclui:
-
-- `discipline`
-- `subcategory`
-- `completed`
-- `answered_questions`
-- `total_questions`
-- `progress`
-- `updated_at`
-
-Esse endpoint e usado pelo app para:
-
-- mostrar quantos simulados ja foram concluidos
-- recuperar o ultimo simulado em andamento ou concluido
-- manter o comportamento consistente entre varios dispositivos da mesma conta
-
-### Resumos e mapa mental
-
-- `GET /summaries`
-- `GET /summaries/personal`
-- `GET /summaries/progress`
-
-#### `GET /summaries`
-
-Retorna um resumo base da subcategoria.
-
-#### `GET /summaries/personal`
-
-Retorna um resumo personalizado para o usuario.
-
-Comportamento atual:
-
-- usa dados reais de desempenho em `question_attempts`
-- considera `discipline` e `subcategory`
-- usa amostras reais de questoes da base
-- pode gerar automaticamente via Gemini quando necessario
-- normaliza a saida para um formato compacto e compativel com mobile
-
-Limites atuais do payload:
-
-- ate `4` nos principais
-- ate `3` itens por no
-
-#### `GET /summaries/progress`
-
-Retorna progresso percentual por subcategoria:
-
-- `answered_questions`
-- `total_questions`
-- `progress`
-
-## Como o mapa mental e gerado
-
-O backend atual nao usa um agente autonomo. O fluxo e:
-
-1. consulta desempenho do usuario no banco
-2. busca amostras reais da subcategoria
-3. monta um prompt estruturado
-4. chama o Gemini
-5. normaliza o JSON de resposta
-6. salva o resumo na base
-
-Fallback:
-
-- se a Gemini API nao estiver disponivel, a API retorna um resumo padrao
+- `http://localhost:8000/docs`
+- `http://localhost:8000/redoc`
 
 ## Observacoes importantes
 
@@ -303,5 +209,7 @@ Os proximos passos naturais sao:
 
 - testes automatizados de endpoints
 - observabilidade de erros e latencia
-- agregados pedagógicos mais ricos por area e disciplina
+- agregados pedagÃ³gicos mais ricos por area e disciplina
 - endurecimento de contratos de resposta da IA
+
+
