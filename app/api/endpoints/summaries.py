@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.core.config import settings
-from app.core.datetime_utils import utc_now
+from app.core.datetime_utils import ensure_utc, utc_now
 from app.db.models import (
     get_questions_table,
     get_summaries_table,
@@ -118,8 +118,9 @@ def get_personal_summary(
     ).mappings().first()
 
     if row is not None:
-        latest_attempt = latest_attempt_at(db, user_id, discipline, subcategory)
-        if latest_attempt and row['updated_at'] and latest_attempt <= row['updated_at']:
+        latest_attempt = ensure_utc(latest_attempt_at(db, user_id, discipline, subcategory))
+        updated_at = ensure_utc(row['updated_at'])
+        if latest_attempt and updated_at and latest_attempt <= updated_at:
             payload = load_summary_payload(row['payload_json'])
             if _has_summary_nodes(payload):
                 return attach_stats(payload, stats)

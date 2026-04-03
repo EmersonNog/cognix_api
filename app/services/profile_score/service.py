@@ -1,12 +1,13 @@
-from sqlalchemy.orm import Session
+﻿from sqlalchemy.orm import Session
 
-from app.core.datetime_utils import to_api_iso
+from app.core.datetime_utils import to_api_iso, utc_now
 from app.services.profile_score.constants import (
     CONSISTENCY_DAYS_WINDOW,
     SUBCATEGORY_ATTENTION_ACCURACY_THRESHOLD,
 )
 from app.services.profile_score.repository import fetch_profile_metrics
 from app.services.profile_score.scoring import calculate_score_components
+
 
 
 def _serialize_questions_by_discipline(question_rows) -> list[dict]:
@@ -20,13 +21,30 @@ def _serialize_questions_by_discipline(question_rows) -> list[dict]:
     ]
 
 
+
 def fetch_profile_score(db: Session, user_id: int) -> dict:
     metrics = fetch_profile_metrics(db, user_id)
+    last_activity_at = metrics['last_activity_at']
+    inactivity_days = (
+        max((utc_now().date() - last_activity_at.date()).days, 0)
+        if last_activity_at is not None
+        else 0
+    )
+
     score_data = calculate_score_components(
-        total_questions=metrics['total_questions'],
-        accuracy_percent=metrics['accuracy_percent'],
-        completed_sessions=metrics['completed_sessions'],
-        active_days_last_30=metrics['active_days_last_30'],
+        unique_questions_answered=metrics['unique_questions_answered'],
+        question_bank_total=metrics['question_bank_total'],
+        disciplines_covered=metrics['disciplines_covered'],
+        total_completed_sessions=metrics['completed_sessions'],
+        historical_accuracy_percent=metrics['accuracy_percent'],
+        recent_attempts=metrics['recent_attempts'],
+        recent_accuracy_percent=metrics['recent_accuracy_percent'],
+        recent_accuracy_sample_size=metrics['recent_accuracy_sample_size'],
+        recent_completed_sessions=metrics['recent_completed_sessions'],
+        recent_active_days=metrics['recent_active_days'],
+        current_correct_streak=metrics['current_correct_streak'],
+        session_accuracy_delta_percent=metrics['session_accuracy_delta_percent'],
+        inactivity_days=inactivity_days,
     )
     next_level, points_to_next_level = score_data['next_level']
 
@@ -34,7 +52,13 @@ def fetch_profile_score(db: Session, user_id: int) -> dict:
         'score': score_data['score'],
         'exact_score': score_data['exact_score'],
         'level': score_data['level'],
+        'momentum_score': score_data['momentum_score'],
+        'exact_momentum_score': score_data['exact_momentum_score'],
+        'momentum_label': score_data['momentum_label'],
         'questions_answered': metrics['total_questions'],
+        'unique_questions_answered': metrics['unique_questions_answered'],
+        'question_bank_total': metrics['question_bank_total'],
+        'disciplines_covered': metrics['disciplines_covered'],
         'total_correct': metrics['total_correct'],
         'accuracy_percent': metrics['accuracy_percent'],
         'completed_sessions': metrics['completed_sessions'],
@@ -52,4 +76,5 @@ def fetch_profile_score(db: Session, user_id: int) -> dict:
         'attention_subcategories_count': metrics['attention_subcategories_count'],
         'attention_accuracy_threshold': SUBCATEGORY_ATTENTION_ACCURACY_THRESHOLD,
         'score_breakdown': score_data['score_breakdown'],
+        'momentum_breakdown': score_data['momentum_breakdown'],
     }

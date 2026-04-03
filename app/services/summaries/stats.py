@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.datetime_utils import to_api_iso
-from app.db.models import get_attempts_table, get_questions_table
+from app.db.models import get_attempt_history_table, get_questions_table
 from app.db.session import engine
 
 
@@ -20,12 +20,12 @@ def derive_error_patterns(stats: dict) -> list[str]:
 
 
 def latest_attempt_at(db: Session, user_id: int, discipline: str, subcategory: str):
-    attempts = get_attempts_table(settings.attempts_table)
+    attempt_history = get_attempt_history_table(settings.attempt_history_table)
     stmt = (
-        select(func.max(attempts.c.answered_at))
-        .where(attempts.c.user_id == user_id)
-        .where(attempts.c.discipline == discipline)
-        .where(attempts.c.subcategory == subcategory)
+        select(func.max(attempt_history.c.answered_at))
+        .where(attempt_history.c.user_id == user_id)
+        .where(attempt_history.c.discipline == discipline)
+        .where(attempt_history.c.subcategory == subcategory)
     )
     return db.execute(stmt).scalar()
 
@@ -36,26 +36,26 @@ def fetch_user_stats(
     discipline: str,
     subcategory: str,
 ) -> dict:
-    attempts = get_attempts_table(settings.attempts_table)
+    attempt_history = get_attempt_history_table(settings.attempt_history_table)
     base_filters = (
-        (attempts.c.user_id == user_id)
-        & (attempts.c.discipline == discipline)
-        & (attempts.c.subcategory == subcategory)
+        (attempt_history.c.user_id == user_id)
+        & (attempt_history.c.discipline == discipline)
+        & (attempt_history.c.subcategory == subcategory)
     )
 
     total = db.execute(
-        select(func.count()).select_from(attempts).where(base_filters)
+        select(func.count()).select_from(attempt_history).where(base_filters)
     ).scalar() or 0
     correct = db.execute(
         select(func.count())
-        .select_from(attempts)
-        .where(base_filters & (attempts.c.is_correct.is_(True)))
+        .select_from(attempt_history)
+        .where(base_filters & (attempt_history.c.is_correct.is_(True)))
     ).scalar() or 0
 
     incorrect_counts = db.execute(
-        select(attempts.c.question_id, func.count().label('qty'))
-        .where(base_filters & (attempts.c.is_correct.is_(False)))
-        .group_by(attempts.c.question_id)
+        select(attempt_history.c.question_id, func.count().label('qty'))
+        .where(base_filters & (attempt_history.c.is_correct.is_(False)))
+        .group_by(attempt_history.c.question_id)
         .order_by(func.count().desc())
         .limit(8)
     ).all()

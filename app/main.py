@@ -30,7 +30,9 @@ def _create_internal_tables() -> None:
         engine,
         settings.users_table,
         settings.attempts_table,
+        settings.attempt_history_table,
         settings.sessions_table,
+        settings.session_history_table,
         settings.summaries_table,
         settings.user_summaries_table,
     )

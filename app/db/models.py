@@ -2,6 +2,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    Index,
     Integer,
     MetaData,
     String,
@@ -84,6 +85,35 @@ def get_attempts_table(table_name: str) -> Table:
     )
 
 
+def get_attempt_history_table(table_name: str) -> Table:
+    return Table(
+        table_name,
+        metadata,
+        _id_column(),
+        *_user_columns(),
+        Column('question_id', Integer, nullable=False, index=True),
+        Column('selected_letter', String(2), nullable=False),
+        Column('is_correct', Boolean, nullable=True),
+        *_discipline_columns(nullable=True),
+        Column(
+            'answered_at',
+            DateTime(timezone=True),
+            nullable=False,
+            default=utc_now,
+            index=True,
+        ),
+        Index(f'ix_{table_name}_user_answered_at', 'user_id', 'answered_at'),
+        Index(
+            f'ix_{table_name}_user_disc_sub_answered_at',
+            'user_id',
+            'discipline',
+            'subcategory',
+            'answered_at',
+        ),
+        extend_existing=True,
+    )
+
+
 def get_sessions_table(table_name: str) -> Table:
     return Table(
         table_name,
@@ -98,6 +128,45 @@ def get_sessions_table(table_name: str) -> Table:
             'discipline',
             'subcategory',
             name=f'uq_{table_name}_user_session',
+        ),
+        extend_existing=True,
+    )
+
+
+def get_session_history_table(table_name: str) -> Table:
+    return Table(
+        table_name,
+        metadata,
+        _id_column(),
+        *_user_columns(),
+        *_discipline_columns(),
+        Column('session_key', String(64), nullable=False),
+        Column('total_questions', Integer, nullable=False, default=0),
+        Column('answered_questions', Integer, nullable=False, default=0),
+        Column('correct_answers', Integer, nullable=False, default=0),
+        Column('wrong_answers', Integer, nullable=False, default=0),
+        Column('elapsed_seconds', Integer, nullable=False, default=0),
+        Column(
+            'completed_at',
+            DateTime(timezone=True),
+            nullable=False,
+            default=utc_now,
+            index=True,
+        ),
+        Index(f'ix_{table_name}_user_completed_at', 'user_id', 'completed_at'),
+        Index(
+            f'ix_{table_name}_user_disc_sub_completed_at',
+            'user_id',
+            'discipline',
+            'subcategory',
+            'completed_at',
+        ),
+        UniqueConstraint(
+            'user_id',
+            'discipline',
+            'subcategory',
+            'session_key',
+            name=f'uq_{table_name}_user_disc_sub_key',
         ),
         extend_existing=True,
     )
@@ -143,13 +212,17 @@ def create_internal_tables(
     engine,
     users_table_name: str,
     attempts_table_name: str,
+    attempt_history_table_name: str,
     sessions_table_name: str,
+    session_history_table_name: str,
     summaries_table_name: str,
     user_summaries_table_name: str,
 ) -> None:
     get_users_table(users_table_name)
     get_attempts_table(attempts_table_name)
+    get_attempt_history_table(attempt_history_table_name)
     get_sessions_table(sessions_table_name)
+    get_session_history_table(session_history_table_name)
     get_summaries_table(summaries_table_name)
     get_user_summaries_table(user_summaries_table_name)
     metadata.create_all(
@@ -157,7 +230,9 @@ def create_internal_tables(
         tables=[
             metadata.tables[users_table_name],
             metadata.tables[attempts_table_name],
+            metadata.tables[attempt_history_table_name],
             metadata.tables[sessions_table_name],
+            metadata.tables[session_history_table_name],
             metadata.tables[summaries_table_name],
             metadata.tables[user_summaries_table_name],
         ],

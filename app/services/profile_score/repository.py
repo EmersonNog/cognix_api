@@ -1,4 +1,4 @@
-import json
+﻿import json
 from datetime import timedelta
 
 from sqlalchemy import case, func, select
@@ -6,54 +6,69 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
-from app.db.models import get_attempts_table, get_sessions_table
+from app.db.models import (
+    get_attempt_history_table,
+    get_questions_table,
+    get_session_history_table,
+    get_sessions_table,
+)
+from app.db.session import engine
 from app.services.profile_score.constants import (
     CONSISTENCY_DAYS_WINDOW,
+    SCORE_CONSISTENCY_WINDOW_DAYS,
+    MOMENTUM_ACCURACY_SAMPLE_SIZE,
+    SCORE_RECENT_ACCURACY_WINDOW_DAYS,
+    SCORE_RECENT_ATTEMPTS_WINDOW_DAYS,
+    SCORE_SESSION_MOMENTUM_WINDOW_DAYS,
+    SCORE_SIMULATION_WINDOW_DAYS,
+    MOMENTUM_STREAK_CAP,
     SUBCATEGORY_ATTENTION_ACCURACY_THRESHOLD,
     SUBCATEGORY_INSIGHT_MIN_ATTEMPTS,
 )
 
 
-def _parse_completed_state(state_json: str | None) -> bool:
+def _parse_state(state_json: str | None) -> dict:
     try:
-        payload = json.loads(state_json or '{}')
+        return json.loads(state_json or '{}')
     except json.JSONDecodeError:
-        return False
-    return payload.get('completed') is True
+        return {}
 
 
-def _parse_elapsed_seconds(state_json: str | None) -> int:
+
+def _coerce_non_negative_int(value: object) -> int:
     try:
-        payload = json.loads(state_json or '{}')
-    except json.JSONDecodeError:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
         return 0
 
-    if payload.get('completed') is True:
-        result = payload.get('result')
-        if isinstance(result, dict):
-            return int(result.get('elapsedSeconds') or 0)
 
-    return int(payload.get('elapsedSeconds') or 0)
+
+def _session_accuracy_percent(answered_questions: int, total_questions: int, correct_answers: int) -> float:
+    denominator = answered_questions if answered_questions > 0 else total_questions
+    if denominator <= 0:
+        return 0.0
+    return round((correct_answers / denominator) * 100, 1)
+
 
 
 def _build_subcategory_insights(
     db: Session,
-    attempts,
+    attempt_history,
     user_id: int,
 ) -> tuple[dict | None, dict | None, int]:
     rows = db.execute(
         select(
-            attempts.c.discipline,
-            attempts.c.subcategory,
+            attempt_history.c.discipline,
+            attempt_history.c.subcategory,
             func.count().label('total_attempts'),
-            func.sum(case((attempts.c.is_correct.is_(True), 1), else_=0)).label(
-                'total_correct'
-            ),
+            func.sum(
+                case((attempt_history.c.is_correct.is_(True), 1), else_=0)
+            ).label('total_correct'),
         )
-        .where(attempts.c.user_id == user_id)
-        .where(attempts.c.discipline.is_not(None))
-        .where(attempts.c.subcategory.is_not(None))
-        .group_by(attempts.c.discipline, attempts.c.subcategory)
+        .where(attempt_history.c.user_id == user_id)
+        .where(attempt_history.c.discipline.is_not(None))
+        .where(attempt_history.c.subcategory.is_not(None))
+        .group_by(attempt_history.c.discipline, attempt_history.c.subcategory)
     ).all()
 
     stats = []
@@ -103,22 +118,220 @@ def _build_subcategory_insights(
     return strongest, weakest, attention_subcategories_count
 
 
-def fetch_profile_metrics(db: Session, user_id: int) -> dict:
-    attempts = get_attempts_table(settings.attempts_table)
-    sessions = get_sessions_table(settings.sessions_table)
-    attempt_filters = attempts.c.user_id == user_id
 
-    total_questions = int(
+def _count_active_days(
+    db: Session,
+    attempt_history,
+    user_id: int,
+    cutoff,
+) -> int:
+    return int(
         db.execute(
-            select(func.count()).select_from(attempts).where(attempt_filters)
+            select(func.count(func.distinct(func.date(attempt_history.c.answered_at))))
+            .select_from(attempt_history)
+            .where(attempt_history.c.user_id == user_id)
+            .where(attempt_history.c.answered_at >= cutoff)
         ).scalar()
         or 0
     )
+
+
+
+def _fallback_completed_session_metrics(
+    db: Session,
+    sessions,
+    user_id: int,
+    recent_cutoff,
+) -> dict:
+    rows = db.execute(
+        select(sessions.c.state_json, sessions.c.updated_at)
+        .where(sessions.c.user_id == user_id)
+        .order_by(sessions.c.updated_at.desc())
+    ).all()
+
+    completed_sessions = 0
+    total_study_seconds = 0
+    recent_completed_sessions = 0
+    last_completed_at = None
+
+    for state_json, updated_at in rows:
+        payload = _parse_state(state_json)
+        if payload.get('completed') is not True:
+            continue
+
+        completed_sessions += 1
+        if updated_at is not None and (
+            last_completed_at is None or updated_at > last_completed_at
+        ):
+            last_completed_at = updated_at
+        if updated_at is not None and updated_at >= recent_cutoff:
+            recent_completed_sessions += 1
+
+        result = payload.get('result') if isinstance(payload.get('result'), dict) else {}
+        total_study_seconds += _coerce_non_negative_int(
+            result.get('elapsedSeconds') or payload.get('elapsedSeconds')
+        )
+
+    return {
+        'completed_sessions': completed_sessions,
+        'total_study_seconds': total_study_seconds,
+        'recent_completed_sessions': recent_completed_sessions,
+        'last_completed_at': last_completed_at,
+    }
+
+
+
+def _recent_accuracy_metrics(
+    db: Session,
+    attempt_history,
+    user_id: int,
+    cutoff,
+) -> tuple[float, int]:
+    rows = db.execute(
+        select(attempt_history.c.is_correct)
+        .where(attempt_history.c.user_id == user_id)
+        .where(attempt_history.c.answered_at >= cutoff)
+        .order_by(attempt_history.c.answered_at.desc(), attempt_history.c.id.desc())
+        .limit(MOMENTUM_ACCURACY_SAMPLE_SIZE)
+    ).all()
+
+    sample_size = len(rows)
+    if sample_size == 0:
+        return 0.0, 0
+
+    correct_answers = sum(1 for (is_correct,) in rows if is_correct is True)
+    return round((correct_answers / sample_size) * 100, 1), sample_size
+
+
+
+def _current_correct_streak(
+    db: Session,
+    attempt_history,
+    user_id: int,
+) -> int:
+    rows = db.execute(
+        select(attempt_history.c.is_correct)
+        .where(attempt_history.c.user_id == user_id)
+        .order_by(attempt_history.c.answered_at.desc(), attempt_history.c.id.desc())
+        .limit(MOMENTUM_STREAK_CAP)
+    ).all()
+
+    streak = 0
+    for (is_correct,) in rows:
+        if is_correct is True:
+            streak += 1
+            continue
+        break
+    return streak
+
+
+
+def _session_momentum_metrics(
+    db: Session,
+    session_history,
+    user_id: int,
+    cutoff,
+) -> dict:
+    rows = db.execute(
+        select(
+            session_history.c.correct_answers,
+            session_history.c.answered_questions,
+            session_history.c.total_questions,
+            session_history.c.completed_at,
+        )
+        .where(session_history.c.user_id == user_id)
+        .order_by(session_history.c.completed_at.desc(), session_history.c.id.desc())
+        .limit(3)
+    ).all()
+
+    if not rows:
+        return {
+            'latest_session_accuracy_percent': 0.0,
+            'session_accuracy_baseline_percent': 0.0,
+            'session_accuracy_delta_percent': 0.0,
+        }
+
+    latest_correct, latest_answered, latest_total, latest_completed_at = rows[0]
+    latest_accuracy = _session_accuracy_percent(
+        int(latest_answered or 0),
+        int(latest_total or 0),
+        int(latest_correct or 0),
+    )
+
+    if latest_completed_at is None or latest_completed_at < cutoff:
+        return {
+            'latest_session_accuracy_percent': latest_accuracy,
+            'session_accuracy_baseline_percent': latest_accuracy,
+            'session_accuracy_delta_percent': 0.0,
+        }
+
+    baseline_rows = rows[1:]
+    if not baseline_rows:
+        return {
+            'latest_session_accuracy_percent': latest_accuracy,
+            'session_accuracy_baseline_percent': latest_accuracy,
+            'session_accuracy_delta_percent': 0.0,
+        }
+
+    baseline_accuracies = [
+        _session_accuracy_percent(
+            int(answered or 0),
+            int(total or 0),
+            int(correct or 0),
+        )
+        for correct, answered, total, _ in baseline_rows
+    ]
+    baseline_accuracy = round(sum(baseline_accuracies) / len(baseline_accuracies), 1)
+    return {
+        'latest_session_accuracy_percent': latest_accuracy,
+        'session_accuracy_baseline_percent': baseline_accuracy,
+        'session_accuracy_delta_percent': round(latest_accuracy - baseline_accuracy, 1),
+    }
+
+
+
+def _latest_timestamp(*values):
+    valid = [value for value in values if value is not None]
+    if not valid:
+        return None
+    return max(valid)
+
+
+
+def fetch_profile_metrics(db: Session, user_id: int) -> dict:
+    now = utc_now()
+    attempt_history = get_attempt_history_table(settings.attempt_history_table)
+    questions = get_questions_table(engine, settings.question_table)
+    session_history = get_session_history_table(settings.session_history_table)
+    sessions = get_sessions_table(settings.sessions_table)
+
+    total_questions = int(
+        db.execute(
+            select(func.count())
+            .select_from(attempt_history)
+            .where(attempt_history.c.user_id == user_id)
+        ).scalar()
+        or 0
+    )
+    unique_questions_answered = int(
+        db.execute(
+            select(func.count(func.distinct(attempt_history.c.question_id)))
+            .select_from(attempt_history)
+            .where(attempt_history.c.user_id == user_id)
+        ).scalar()
+        or 0
+    )
+    question_bank_total = int(
+        db.execute(select(func.count()).select_from(questions)).scalar()
+        or 0
+    )
+
     total_correct = int(
         db.execute(
             select(func.count())
-            .select_from(attempts)
-            .where(attempt_filters & attempts.c.is_correct.is_(True))
+            .select_from(attempt_history)
+            .where(attempt_history.c.user_id == user_id)
+            .where(attempt_history.c.is_correct.is_(True))
         ).scalar()
         or 0
     )
@@ -126,46 +339,124 @@ def fetch_profile_metrics(db: Session, user_id: int) -> dict:
         round((total_correct / total_questions) * 100, 1) if total_questions else 0.0
     )
 
-    consistency_cutoff = utc_now() - timedelta(days=CONSISTENCY_DAYS_WINDOW - 1)
-    active_days_last_30 = int(
+    consistency_cutoff = now - timedelta(days=CONSISTENCY_DAYS_WINDOW - 1)
+    active_days_last_30 = _count_active_days(
+        db,
+        attempt_history,
+        user_id,
+        consistency_cutoff,
+    )
+
+    question_rows = db.execute(
+        select(
+            attempt_history.c.discipline,
+            func.count().label('count'),
+        )
+        .where(attempt_history.c.user_id == user_id)
+        .where(attempt_history.c.discipline.is_not(None))
+        .group_by(attempt_history.c.discipline)
+        .order_by(func.count().desc())
+    ).all()
+
+    disciplines_covered = len(question_rows)
+
+    strongest_subcategory, weakest_subcategory, attention_subcategories_count = (
+        _build_subcategory_insights(db, attempt_history, user_id)
+    )
+
+    recent_attempts_cutoff = now - timedelta(days=SCORE_RECENT_ATTEMPTS_WINDOW_DAYS - 1)
+    recent_attempts = int(
         db.execute(
-            select(func.count(func.distinct(func.date(attempts.c.answered_at))))
-            .select_from(attempts)
-            .where(attempt_filters)
-            .where(attempts.c.answered_at >= consistency_cutoff)
+            select(func.count())
+            .select_from(attempt_history)
+            .where(attempt_history.c.user_id == user_id)
+            .where(attempt_history.c.answered_at >= recent_attempts_cutoff)
         ).scalar()
         or 0
     )
 
-    completed_rows = db.execute(
-        select(sessions.c.state_json).where(sessions.c.user_id == user_id)
-    ).all()
-    completed_sessions = sum(1 for row in completed_rows if _parse_completed_state(row[0]))
-    total_study_seconds = sum(_parse_elapsed_seconds(row[0]) for row in completed_rows)
+    recent_accuracy_cutoff = now - timedelta(days=SCORE_RECENT_ACCURACY_WINDOW_DAYS - 1)
+    recent_accuracy_percent, recent_accuracy_sample_size = _recent_accuracy_metrics(
+        db,
+        attempt_history,
+        user_id,
+        recent_accuracy_cutoff,
+    )
 
-    last_activity_at = db.execute(
-        select(func.max(attempts.c.answered_at))
-        .select_from(attempts)
-        .where(attempt_filters)
+    recent_consistency_cutoff = now - timedelta(days=SCORE_CONSISTENCY_WINDOW_DAYS - 1)
+    recent_active_days = _count_active_days(
+        db,
+        attempt_history,
+        user_id,
+        recent_consistency_cutoff,
+    )
+
+    recent_sessions_cutoff = now - timedelta(days=SCORE_SIMULATION_WINDOW_DAYS - 1)
+    completed_sessions = int(
+        db.execute(
+            select(func.count())
+            .select_from(session_history)
+            .where(session_history.c.user_id == user_id)
+        ).scalar()
+        or 0
+    )
+    total_study_seconds = int(
+        db.execute(
+            select(func.coalesce(func.sum(session_history.c.elapsed_seconds), 0))
+            .select_from(session_history)
+            .where(session_history.c.user_id == user_id)
+        ).scalar()
+        or 0
+    )
+    recent_completed_sessions = int(
+        db.execute(
+            select(func.count())
+            .select_from(session_history)
+            .where(session_history.c.user_id == user_id)
+            .where(session_history.c.completed_at >= recent_sessions_cutoff)
+        ).scalar()
+        or 0
+    )
+    last_completed_session_at = db.execute(
+        select(func.max(session_history.c.completed_at))
+        .select_from(session_history)
+        .where(session_history.c.user_id == user_id)
     ).scalar()
 
-    question_rows = db.execute(
-        select(
-            attempts.c.discipline,
-            func.count().label('count'),
+    if completed_sessions == 0 and total_study_seconds == 0:
+        fallback_metrics = _fallback_completed_session_metrics(
+            db,
+            sessions,
+            user_id,
+            recent_sessions_cutoff,
         )
-        .where(attempt_filters)
-        .where(attempts.c.discipline.is_not(None))
-        .group_by(attempts.c.discipline)
-        .order_by(func.count().desc())
-    ).all()
+        completed_sessions = fallback_metrics['completed_sessions']
+        total_study_seconds = fallback_metrics['total_study_seconds']
+        recent_completed_sessions = fallback_metrics['recent_completed_sessions']
+        last_completed_session_at = fallback_metrics['last_completed_at']
 
-    strongest_subcategory, weakest_subcategory, attention_subcategories_count = (
-        _build_subcategory_insights(db, attempts, user_id)
+    session_momentum_cutoff = now - timedelta(days=SCORE_SESSION_MOMENTUM_WINDOW_DAYS - 1)
+    session_momentum_metrics = _session_momentum_metrics(
+        db,
+        session_history,
+        user_id,
+        session_momentum_cutoff,
+    )
+
+    last_activity_at = _latest_timestamp(
+        db.execute(
+            select(func.max(attempt_history.c.answered_at))
+            .select_from(attempt_history)
+            .where(attempt_history.c.user_id == user_id)
+        ).scalar(),
+        last_completed_session_at,
     )
 
     return {
         'total_questions': total_questions,
+        'unique_questions_answered': unique_questions_answered,
+        'question_bank_total': question_bank_total,
+        'disciplines_covered': disciplines_covered,
         'total_correct': total_correct,
         'accuracy_percent': accuracy_percent,
         'active_days_last_30': active_days_last_30,
@@ -176,4 +467,20 @@ def fetch_profile_metrics(db: Session, user_id: int) -> dict:
         'strongest_subcategory': strongest_subcategory,
         'weakest_subcategory': weakest_subcategory,
         'attention_subcategories_count': attention_subcategories_count,
+        'recent_attempts': recent_attempts,
+        'recent_accuracy_percent': recent_accuracy_percent,
+        'recent_accuracy_sample_size': recent_accuracy_sample_size,
+        'recent_completed_sessions': recent_completed_sessions,
+        'recent_active_days': recent_active_days,
+        'current_correct_streak': _current_correct_streak(db, attempt_history, user_id),
+        'latest_session_accuracy_percent': session_momentum_metrics[
+            'latest_session_accuracy_percent'
+        ],
+        'session_accuracy_baseline_percent': session_momentum_metrics[
+            'session_accuracy_baseline_percent'
+        ],
+        'session_accuracy_delta_percent': session_momentum_metrics[
+            'session_accuracy_delta_percent'
+        ],
     }
+
