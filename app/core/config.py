@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     user_avatar_inventory_table: str = 'user_avatar_inventory'
     allowed_origins: list[str] = ['*']
     firebase_credentials: str | None = None
+    firebase_clock_skew_seconds: int = 5
     gemini_api_key: str | None = None
     gemini_model: str = 'gemini-3-flash-preview'
 

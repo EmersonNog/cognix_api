@@ -25,4 +25,8 @@ def get_firebase_app() -> App:
 
 
 def verify_firebase_token(token: str) -> dict:
-    return auth.verify_id_token(token, app=get_firebase_app())
+    return auth.verify_id_token(
+        token,
+        app=get_firebase_app(),
+        clock_skew_seconds=max(0, int(settings.firebase_clock_skew_seconds)),
+    )
