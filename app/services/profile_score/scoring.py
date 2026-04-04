@@ -1,46 +1,32 @@
-﻿from app.services.profile_score.constants import (
+from app.services.profile_score.constants import (
+    INACTIVITY_GRACE_DAYS,
     LEVEL_THRESHOLDS,
-    MOMENTUM_ACCURACY_CEILING,
-    MOMENTUM_ACCURACY_FLOOR,
-    MOMENTUM_ACCURACY_POINTS_ABS,
-    MOMENTUM_ACCURACY_SAMPLE_SIZE,
-    MOMENTUM_ACTIVE_DAYS_GOAL,
-    MOMENTUM_ACTIVE_DAYS_POINTS_ABS,
-    MOMENTUM_ATTEMPTS_GOAL,
-    MOMENTUM_ATTEMPTS_POINTS_ABS,
-    MOMENTUM_SESSION_DELTA_FOR_MAX,
-    MOMENTUM_SESSION_DELTA_NEUTRAL,
-    MOMENTUM_SESSION_POINTS_ABS,
-    MOMENTUM_INACTIVITY_PENALTY_MAX,
-    MOMENTUM_INACTIVITY_PENALTY_PER_DAY,
-    MOMENTUM_SIMULATION_GOAL,
-    MOMENTUM_SIMULATION_POINTS_MAX,
-    MOMENTUM_STREAK_CAP,
-    MOMENTUM_STREAK_POINTS_MAX,
     PROGRESS_ACCURACY_CEILING,
     PROGRESS_ACCURACY_FLOOR,
     PROGRESS_ACCURACY_POINTS_MAX,
     PROGRESS_ACCURACY_SAMPLE_SIZE,
     PROGRESS_DISCIPLINE_GOAL,
-    INACTIVITY_GRACE_DAYS,
-    SCORE_INACTIVITY_PENALTY_MAX,
-    SCORE_INACTIVITY_PENALTY_PER_DAY,
     PROGRESS_DISCIPLINE_POINTS_MAX,
     PROGRESS_QUESTION_COVERAGE_POINTS_MAX,
     PROGRESS_SESSION_GOAL,
     PROGRESS_SESSION_POINTS_MAX,
+    RECENT_INDEX_ACTIVE_DAYS_GOAL,
+    RECENT_INDEX_ATTEMPT_DECAY,
+    RECENT_INDEX_ATTEMPTS_WEIGHT,
+    RECENT_INDEX_CONSISTENCY_WEIGHT,
+    RECENT_INDEX_SESSION_GOAL,
+    RECENT_INDEX_SIMULATION_WEIGHT,
+    SCORE_INACTIVITY_PENALTY_MAX,
+    SCORE_INACTIVITY_PENALTY_PER_DAY,
 )
-
 
 
 def round_points(value: float) -> float:
     return round(float(value), 1)
 
 
-
 def clamp(value: float, lower: float, upper: float) -> float:
     return max(lower, min(value, upper))
-
 
 
 def ratio_points(raw_value: float, goal_value: float, max_points: float) -> float:
@@ -49,12 +35,10 @@ def ratio_points(raw_value: float, goal_value: float, max_points: float) -> floa
     return round_points(min(raw_value / goal_value, 1.0) * max_points)
 
 
-
 def normalized_progress(accuracy_percent: float, floor: float, ceiling: float) -> float:
     if ceiling <= floor:
         return 0.0
     return clamp((accuracy_percent - floor) / (ceiling - floor), 0.0, 1.0)
-
 
 
 def weighted_accuracy_points(
@@ -74,56 +58,11 @@ def weighted_accuracy_points(
     )
 
 
-
-def balanced_habit_points(raw_value: float, goal_value: float, max_abs_points: float) -> float:
-    if goal_value <= 0:
-        return 0.0
-    progress = clamp(raw_value / goal_value, 0.0, 1.0)
-    return round_points(((progress * 2.0) - 1.0) * max_abs_points)
-
-
-
-def balanced_accuracy_points(
-    accuracy_percent: float,
-    sample_size: int,
-    floor: float,
-    ceiling: float,
-    max_abs_points: float,
-    sample_goal: int,
-) -> float:
-    if sample_size <= 0 or sample_goal <= 0:
-        return 0.0
-
-    centered_progress = (normalized_progress(accuracy_percent, floor, ceiling) * 2.0) - 1.0
-    confidence = min(sample_size / sample_goal, 1.0)
-    return round_points(centered_progress * max_abs_points * confidence)
-
-
-
-def session_delta_points(delta_percent: float) -> float:
-    if MOMENTUM_SESSION_DELTA_FOR_MAX <= MOMENTUM_SESSION_DELTA_NEUTRAL:
-        return 0.0
-
-    absolute_delta = abs(delta_percent)
-    if absolute_delta <= MOMENTUM_SESSION_DELTA_NEUTRAL:
-        return 0.0
-
-    scaled = min(
-        (absolute_delta - MOMENTUM_SESSION_DELTA_NEUTRAL)
-        / (MOMENTUM_SESSION_DELTA_FOR_MAX - MOMENTUM_SESSION_DELTA_NEUTRAL),
-        1.0,
-    )
-    direction = 1.0 if delta_percent > 0 else -1.0
-    return round_points(direction * scaled * MOMENTUM_SESSION_POINTS_ABS)
-
-
-
 def derive_level(score: float) -> str:
     for minimum_score, label in LEVEL_THRESHOLDS:
         if score >= minimum_score:
             return label
     return 'Iniciante'
-
 
 
 def next_level(score: float) -> tuple[str | None, int]:
@@ -135,18 +74,110 @@ def next_level(score: float) -> tuple[str | None, int]:
     return None, 0
 
 
+def _weighted_recent_accuracy_signal(recent_attempt_outcomes: list[bool]) -> float | None:
+    if not recent_attempt_outcomes:
+        return None
 
-def derive_momentum_label(momentum_score: float) -> str:
-    if momentum_score >= 6.0:
-        return 'Em alta'
-    if momentum_score >= 2.0:
-        return 'Positivo'
-    if momentum_score <= -6.0:
-        return 'Em queda'
-    if momentum_score <= -2.0:
-        return 'Atencao'
-    return 'Estavel'
+    weighted_points = 0.0
+    total_weight = 0.0
+    for index, is_correct in enumerate(recent_attempt_outcomes):
+        weight = RECENT_INDEX_ATTEMPT_DECAY ** index
+        weighted_points += (100.0 if is_correct else 0.0) * weight
+        total_weight += weight
 
+    if total_weight <= 0:
+        return None
+    return round_points(weighted_points / total_weight)
+
+
+def _recent_consistency_signal(recent_active_days: int) -> float:
+    if RECENT_INDEX_ACTIVE_DAYS_GOAL <= 0:
+        return 0.0
+
+    return round_points(
+        clamp(recent_active_days / RECENT_INDEX_ACTIVE_DAYS_GOAL, 0.0, 1.0) * 100.0
+    )
+
+
+def _recent_simulation_signal(
+    latest_session_accuracy_percent: float,
+    recent_completed_sessions: int,
+) -> float:
+    if RECENT_INDEX_SESSION_GOAL <= 0:
+        return 50.0
+
+    session_activity_ratio = clamp(
+        recent_completed_sessions / RECENT_INDEX_SESSION_GOAL,
+        0.0,
+        1.0,
+    )
+    latest_accuracy = clamp(latest_session_accuracy_percent, 0.0, 100.0)
+    return round_points(50.0 + ((latest_accuracy - 50.0) * session_activity_ratio))
+
+
+def calculate_recent_index_data(
+    recent_attempt_outcomes: list[bool],
+    recent_active_days: int,
+    recent_completed_sessions: int,
+    latest_session_accuracy_percent: float,
+) -> dict:
+    accuracy_signal = _weighted_recent_accuracy_signal(recent_attempt_outcomes)
+    consistency_signal = _recent_consistency_signal(recent_active_days)
+    simulation_signal = _recent_simulation_signal(
+        latest_session_accuracy_percent,
+        recent_completed_sessions,
+    )
+    ready = (
+        bool(recent_attempt_outcomes)
+        or recent_active_days > 0
+        or recent_completed_sessions > 0
+    )
+
+    if not ready:
+        return {
+            'recent_index': 0,
+            'exact_recent_index': 0.0,
+            'recent_index_ready': False,
+            'recent_index_breakdown': {
+                'accuracy_signal': 0.0,
+                'consistency_signal': 0.0,
+                'simulation_signal': 0.0,
+                'attempt_sample_size': 0,
+                'weights': {
+                    'accuracy': RECENT_INDEX_ATTEMPTS_WEIGHT,
+                    'consistency': RECENT_INDEX_CONSISTENCY_WEIGHT,
+                    'simulation': RECENT_INDEX_SIMULATION_WEIGHT,
+                },
+            },
+        }
+
+    exact_recent_index = round_points(
+        clamp(
+            (accuracy_signal if accuracy_signal is not None else 50.0)
+            * RECENT_INDEX_ATTEMPTS_WEIGHT
+            + consistency_signal * RECENT_INDEX_CONSISTENCY_WEIGHT
+            + simulation_signal * RECENT_INDEX_SIMULATION_WEIGHT,
+            0.0,
+            100.0,
+        )
+    )
+
+    return {
+        'recent_index': int(round(exact_recent_index)),
+        'exact_recent_index': exact_recent_index,
+        'recent_index_ready': True,
+        'recent_index_breakdown': {
+            'accuracy_signal': accuracy_signal if accuracy_signal is not None else 50.0,
+            'consistency_signal': consistency_signal,
+            'simulation_signal': simulation_signal,
+            'attempt_sample_size': len(recent_attempt_outcomes),
+            'weights': {
+                'accuracy': RECENT_INDEX_ATTEMPTS_WEIGHT,
+                'consistency': RECENT_INDEX_CONSISTENCY_WEIGHT,
+                'simulation': RECENT_INDEX_SIMULATION_WEIGHT,
+            },
+        },
+    }
 
 
 def calculate_score_components(
@@ -155,13 +186,10 @@ def calculate_score_components(
     disciplines_covered: int,
     total_completed_sessions: int,
     historical_accuracy_percent: float,
-    recent_attempts: int,
-    recent_accuracy_percent: float,
-    recent_accuracy_sample_size: int,
     recent_completed_sessions: int,
     recent_active_days: int,
-    current_correct_streak: int,
-    session_accuracy_delta_percent: float,
+    recent_attempt_outcomes: list[bool],
+    latest_session_accuracy_percent: float,
     inactivity_days: int,
 ) -> dict:
     progress_question_coverage_score = ratio_points(
@@ -209,60 +237,11 @@ def calculate_score_components(
         clamp(base_exact_score - score_inactivity_penalty, 0.0, 100.0)
     )
 
-    momentum_attempts_score = balanced_habit_points(
-        recent_attempts,
-        MOMENTUM_ATTEMPTS_GOAL,
-        MOMENTUM_ATTEMPTS_POINTS_ABS,
-    )
-    momentum_consistency_score = balanced_habit_points(
-        recent_active_days,
-        MOMENTUM_ACTIVE_DAYS_GOAL,
-        MOMENTUM_ACTIVE_DAYS_POINTS_ABS,
-    )
-    momentum_accuracy_score = balanced_accuracy_points(
-        recent_accuracy_percent,
-        recent_accuracy_sample_size,
-        MOMENTUM_ACCURACY_FLOOR,
-        MOMENTUM_ACCURACY_CEILING,
-        MOMENTUM_ACCURACY_POINTS_ABS,
-        MOMENTUM_ACCURACY_SAMPLE_SIZE,
-    )
-    momentum_simulations_score = ratio_points(
-        recent_completed_sessions,
-        MOMENTUM_SIMULATION_GOAL,
-        MOMENTUM_SIMULATION_POINTS_MAX,
-    )
-    momentum_streak_score = ratio_points(
-        min(current_correct_streak, MOMENTUM_STREAK_CAP),
-        MOMENTUM_STREAK_CAP,
-        MOMENTUM_STREAK_POINTS_MAX,
-    )
-    momentum_session_score = session_delta_points(session_accuracy_delta_percent)
-
-    raw_momentum_score = round_points(
-        clamp(
-            momentum_attempts_score
-            + momentum_consistency_score
-            + momentum_accuracy_score
-            + momentum_simulations_score
-            + momentum_streak_score
-            + momentum_session_score,
-            -10.0,
-            10.0,
-        )
-    )
-
-    momentum_ready = total_completed_sessions > 0
-    momentum_inactivity_penalty = round_points(
-        min(
-            penalized_inactivity_days * MOMENTUM_INACTIVITY_PENALTY_PER_DAY,
-            MOMENTUM_INACTIVITY_PENALTY_MAX,
-        )
-    )
-    exact_momentum_score = (
-        round_points(clamp(raw_momentum_score - momentum_inactivity_penalty, -10.0, 10.0))
-        if momentum_ready
-        else 0.0
+    recent_index_data = calculate_recent_index_data(
+        recent_attempt_outcomes=recent_attempt_outcomes,
+        recent_active_days=recent_active_days,
+        recent_completed_sessions=recent_completed_sessions,
+        latest_session_accuracy_percent=latest_session_accuracy_percent,
     )
 
     return {
@@ -307,61 +286,8 @@ def calculate_score_components(
                 'base_score': base_exact_score,
             },
         },
-        'momentum_score': int(round(exact_momentum_score)),
-        'exact_momentum_score': exact_momentum_score,
-        'momentum_label': derive_momentum_label(exact_momentum_score),
-        'momentum_breakdown': {
-            'attempts': {
-                'points': momentum_attempts_score,
-                'max_abs_points': MOMENTUM_ATTEMPTS_POINTS_ABS,
-                'raw': recent_attempts,
-                'goal': MOMENTUM_ATTEMPTS_GOAL,
-            },
-            'consistency': {
-                'points': momentum_consistency_score,
-                'max_abs_points': MOMENTUM_ACTIVE_DAYS_POINTS_ABS,
-                'raw': recent_active_days,
-                'goal': MOMENTUM_ACTIVE_DAYS_GOAL,
-            },
-            'accuracy': {
-                'points': momentum_accuracy_score,
-                'max_abs_points': MOMENTUM_ACCURACY_POINTS_ABS,
-                'raw': recent_accuracy_percent,
-                'sample_size': recent_accuracy_sample_size,
-                'sample_goal': MOMENTUM_ACCURACY_SAMPLE_SIZE,
-                'floor': MOMENTUM_ACCURACY_FLOOR,
-                'ceiling': MOMENTUM_ACCURACY_CEILING,
-            },
-            'simulations': {
-                'points': momentum_simulations_score,
-                'max_points': MOMENTUM_SIMULATION_POINTS_MAX,
-                'raw': recent_completed_sessions,
-                'goal': MOMENTUM_SIMULATION_GOAL,
-            },
-            'streak': {
-                'points': momentum_streak_score,
-                'max_points': MOMENTUM_STREAK_POINTS_MAX,
-                'raw': current_correct_streak,
-                'cap': MOMENTUM_STREAK_CAP,
-            },
-            'latest_session_delta': {
-                'points': momentum_session_score,
-                'max_abs_points': MOMENTUM_SESSION_POINTS_ABS,
-                'raw_delta': session_accuracy_delta_percent,
-                'neutral_delta': MOMENTUM_SESSION_DELTA_NEUTRAL,
-                'delta_for_max': MOMENTUM_SESSION_DELTA_FOR_MAX,
-            },
-            'activation': {
-                'ready': momentum_ready,
-                'completed_sessions': total_completed_sessions,
-                'raw_score': raw_momentum_score,
-            },
-            'inactivity': {
-                'days': inactivity_days,
-                'grace_days': INACTIVITY_GRACE_DAYS,
-                'penalized_days': penalized_inactivity_days,
-                'penalty': momentum_inactivity_penalty,
-                'max_penalty': MOMENTUM_INACTIVITY_PENALTY_MAX,
-            },
-        },
+        'recent_index': recent_index_data['recent_index'],
+        'exact_recent_index': recent_index_data['exact_recent_index'],
+        'recent_index_ready': recent_index_data['recent_index_ready'],
+        'recent_index_breakdown': recent_index_data['recent_index_breakdown'],
     }

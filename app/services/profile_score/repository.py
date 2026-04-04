@@ -15,13 +15,10 @@ from app.db.models import (
 from app.db.session import engine
 from app.services.profile_score.constants import (
     CONSISTENCY_DAYS_WINDOW,
+    RECENT_INDEX_ATTEMPT_SAMPLE_SIZE,
     SCORE_CONSISTENCY_WINDOW_DAYS,
-    MOMENTUM_ACCURACY_SAMPLE_SIZE,
     SCORE_RECENT_ACCURACY_WINDOW_DAYS,
-    SCORE_RECENT_ATTEMPTS_WINDOW_DAYS,
-    SCORE_SESSION_MOMENTUM_WINDOW_DAYS,
     SCORE_SIMULATION_WINDOW_DAYS,
-    MOMENTUM_STREAK_CAP,
     SUBCATEGORY_ATTENTION_ACCURACY_THRESHOLD,
     SUBCATEGORY_INSIGHT_MIN_ATTEMPTS,
 )
@@ -181,112 +178,49 @@ def _fallback_completed_session_metrics(
 
 
 
-def _recent_accuracy_metrics(
+def _recent_attempt_outcomes(
     db: Session,
     attempt_history,
     user_id: int,
     cutoff,
-) -> tuple[float, int]:
+) -> list[bool]:
     rows = db.execute(
         select(attempt_history.c.is_correct)
         .where(attempt_history.c.user_id == user_id)
         .where(attempt_history.c.answered_at >= cutoff)
+        .where(attempt_history.c.is_correct.is_not(None))
         .order_by(attempt_history.c.answered_at.desc(), attempt_history.c.id.desc())
-        .limit(MOMENTUM_ACCURACY_SAMPLE_SIZE)
+        .limit(RECENT_INDEX_ATTEMPT_SAMPLE_SIZE)
     ).all()
 
-    sample_size = len(rows)
-    if sample_size == 0:
-        return 0.0, 0
-
-    correct_answers = sum(1 for (is_correct,) in rows if is_correct is True)
-    return round((correct_answers / sample_size) * 100, 1), sample_size
+    return [bool(is_correct) for (is_correct,) in rows]
 
 
-
-def _current_correct_streak(
-    db: Session,
-    attempt_history,
-    user_id: int,
-) -> int:
-    rows = db.execute(
-        select(attempt_history.c.is_correct)
-        .where(attempt_history.c.user_id == user_id)
-        .order_by(attempt_history.c.answered_at.desc(), attempt_history.c.id.desc())
-        .limit(MOMENTUM_STREAK_CAP)
-    ).all()
-
-    streak = 0
-    for (is_correct,) in rows:
-        if is_correct is True:
-            streak += 1
-            continue
-        break
-    return streak
-
-
-
-def _session_momentum_metrics(
+def _latest_session_accuracy_percent(
     db: Session,
     session_history,
     user_id: int,
-    cutoff,
-) -> dict:
+) -> float:
     rows = db.execute(
         select(
             session_history.c.correct_answers,
             session_history.c.answered_questions,
             session_history.c.total_questions,
-            session_history.c.completed_at,
         )
         .where(session_history.c.user_id == user_id)
         .order_by(session_history.c.completed_at.desc(), session_history.c.id.desc())
-        .limit(3)
+        .limit(1)
     ).all()
 
     if not rows:
-        return {
-            'latest_session_accuracy_percent': 0.0,
-            'session_accuracy_baseline_percent': 0.0,
-            'session_accuracy_delta_percent': 0.0,
-        }
+        return 0.0
 
-    latest_correct, latest_answered, latest_total, latest_completed_at = rows[0]
-    latest_accuracy = _session_accuracy_percent(
+    latest_correct, latest_answered, latest_total = rows[0]
+    return _session_accuracy_percent(
         int(latest_answered or 0),
         int(latest_total or 0),
         int(latest_correct or 0),
     )
-
-    if latest_completed_at is None or latest_completed_at < cutoff:
-        return {
-            'latest_session_accuracy_percent': latest_accuracy,
-            'session_accuracy_baseline_percent': latest_accuracy,
-            'session_accuracy_delta_percent': 0.0,
-        }
-
-    baseline_rows = rows[1:]
-    if not baseline_rows:
-        return {
-            'latest_session_accuracy_percent': latest_accuracy,
-            'session_accuracy_baseline_percent': latest_accuracy,
-            'session_accuracy_delta_percent': 0.0,
-        }
-
-    baseline_accuracies = [
-        _session_accuracy_percent(
-            int(answered or 0),
-            int(total or 0),
-            int(correct or 0),
-        )
-        for correct, answered, total, _ in baseline_rows
-    ]
-    baseline_accuracy = round(sum(baseline_accuracies) / len(baseline_accuracies), 1)
-    return {
-        'latest_session_accuracy_percent': latest_accuracy,
-        'session_accuracy_baseline_percent': baseline_accuracy,
-        'session_accuracy_delta_percent': round(latest_accuracy - baseline_accuracy, 1),
-    }
 
 
 
@@ -364,19 +298,8 @@ def fetch_profile_metrics(db: Session, user_id: int) -> dict:
         _build_subcategory_insights(db, attempt_history, user_id)
     )
 
-    recent_attempts_cutoff = now - timedelta(days=SCORE_RECENT_ATTEMPTS_WINDOW_DAYS - 1)
-    recent_attempts = int(
-        db.execute(
-            select(func.count())
-            .select_from(attempt_history)
-            .where(attempt_history.c.user_id == user_id)
-            .where(attempt_history.c.answered_at >= recent_attempts_cutoff)
-        ).scalar()
-        or 0
-    )
-
     recent_accuracy_cutoff = now - timedelta(days=SCORE_RECENT_ACCURACY_WINDOW_DAYS - 1)
-    recent_accuracy_percent, recent_accuracy_sample_size = _recent_accuracy_metrics(
+    recent_attempt_outcomes = _recent_attempt_outcomes(
         db,
         attempt_history,
         user_id,
@@ -435,12 +358,10 @@ def fetch_profile_metrics(db: Session, user_id: int) -> dict:
         recent_completed_sessions = fallback_metrics['recent_completed_sessions']
         last_completed_session_at = fallback_metrics['last_completed_at']
 
-    session_momentum_cutoff = now - timedelta(days=SCORE_SESSION_MOMENTUM_WINDOW_DAYS - 1)
-    session_momentum_metrics = _session_momentum_metrics(
+    latest_session_accuracy_percent = _latest_session_accuracy_percent(
         db,
         session_history,
         user_id,
-        session_momentum_cutoff,
     )
 
     last_activity_at = _latest_timestamp(
@@ -467,20 +388,9 @@ def fetch_profile_metrics(db: Session, user_id: int) -> dict:
         'strongest_subcategory': strongest_subcategory,
         'weakest_subcategory': weakest_subcategory,
         'attention_subcategories_count': attention_subcategories_count,
-        'recent_attempts': recent_attempts,
-        'recent_accuracy_percent': recent_accuracy_percent,
-        'recent_accuracy_sample_size': recent_accuracy_sample_size,
+        'recent_attempt_outcomes': recent_attempt_outcomes,
         'recent_completed_sessions': recent_completed_sessions,
         'recent_active_days': recent_active_days,
-        'current_correct_streak': _current_correct_streak(db, attempt_history, user_id),
-        'latest_session_accuracy_percent': session_momentum_metrics[
-            'latest_session_accuracy_percent'
-        ],
-        'session_accuracy_baseline_percent': session_momentum_metrics[
-            'session_accuracy_baseline_percent'
-        ],
-        'session_accuracy_delta_percent': session_momentum_metrics[
-            'session_accuracy_delta_percent'
-        ],
+        'latest_session_accuracy_percent': latest_session_accuracy_percent,
     }
 
