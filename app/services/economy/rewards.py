@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.core.datetime_utils import utc_now
 
-from .catalog import QUESTION_REWARD_HALF_UNITS, coins_from_half_units
+from .avatar_store.catalog import QUESTION_REWARD_HALF_UNITS, coins_from_half_units
 from .ledger import insert_coin_ledger_entry
 from .state import ensure_user_economy_defaults, fetch_user_economy_state
 from .tables import users_table

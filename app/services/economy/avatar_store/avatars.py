@@ -4,13 +4,13 @@ from sqlalchemy.orm import Session
 from app.core.datetime_utils import utc_now
 
 from .catalog import catalog_by_seed, coins_from_half_units
-from .ledger import insert_coin_ledger_entry
-from .state import (
+from ..ledger import insert_coin_ledger_entry
+from ..state import (
     ensure_user_economy_defaults,
     fetch_user_economy_state,
     lock_user_economy_row,
 )
-from .tables import avatar_inventory_table, users_table
+from ..tables import avatar_inventory_table, users_table
 
 
 def select_profile_avatar(
@@ -44,7 +44,7 @@ def select_profile_avatar(
         str(seed)
         for seed in state['owned_avatar_seeds']
     }
-    cost_half_units = int(catalog_item['cost_half_units'])
+    cost_half_units = catalog_item.cost_half_units
 
     if (
         normalized_seed not in owned_avatar_seeds

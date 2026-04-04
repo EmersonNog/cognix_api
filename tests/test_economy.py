@@ -9,7 +9,10 @@ from app.services.economy import (
     coins_from_half_units,
     select_profile_avatar,
 )
-from app.services.economy.catalog import build_avatar_store_payload
+from app.services.economy.avatar_store import (
+    AVATAR_STORE_CATALOG,
+    build_avatar_store_payload,
+)
 
 
 class EconomyTests(unittest.TestCase):
@@ -31,11 +34,16 @@ class EconomyTests(unittest.TestCase):
 
         self.assertTrue(avatar_1['owned'])
         self.assertFalse(avatar_1['equipped'])
+        self.assertEqual(avatar_1['rarity'], 'comum')
+        self.assertTrue(avatar_1['theme'])
         self.assertTrue(avatar_3['owned'])
         self.assertTrue(avatar_3['equipped'])
         self.assertTrue(avatar_3['affordable'])
         self.assertFalse(avatar_6['owned'])
         self.assertFalse(avatar_6['affordable'])
+
+    def test_avatar_store_catalog_has_at_least_twenty_items(self) -> None:
+        self.assertGreaterEqual(len(AVATAR_STORE_CATALOG), 20)
 
     @patch('app.api.endpoints.attempts._fetch_question_lookup')
     def test_attempt_rejects_unknown_question_before_awarding(self, lookup_mock) -> None:
@@ -55,9 +63,9 @@ class EconomyTests(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 404)
         db.commit.assert_not_called()
 
-    @patch('app.services.economy.avatars.ensure_user_economy_defaults')
-    @patch('app.services.economy.avatars.lock_user_economy_row')
-    @patch('app.services.economy.avatars.fetch_user_economy_state')
+    @patch('app.services.economy.avatar_store.avatars.ensure_user_economy_defaults')
+    @patch('app.services.economy.avatar_store.avatars.lock_user_economy_row')
+    @patch('app.services.economy.avatar_store.avatars.fetch_user_economy_state')
     def test_avatar_purchase_returns_insufficient_funds_when_atomic_debit_fails(
         self,
         state_mock,

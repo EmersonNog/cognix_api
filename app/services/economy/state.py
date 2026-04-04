@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.datetime_utils import utc_now
 
-from .catalog import (
+from .avatar_store.catalog import (
     DEFAULT_AVATAR_SEED,
     QUESTION_REWARD_HALF_UNITS,
     build_avatar_store_payload,
