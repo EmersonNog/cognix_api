@@ -1,6 +1,6 @@
 # Cognix API
 
-Backend FastAPI da plataforma Cognix. Esta API concentra autenticação com Firebase, leitura da base de questões, registro de tentativas, persistência de sessões de treino e geração de resumos personalizados com IA.
+Backend FastAPI da plataforma Cognix. A API centraliza autenticação com Firebase, leitura da base de questões, registro de tentativas, persistência de sessões de treino, score de perfil com ritmo recente, economia com moedas e avatares, e geração de resumos personalizados com IA.
 
 ## Docker
 
@@ -22,7 +22,9 @@ docker compose up -d --build
 .\scripts\restore_db.ps1
 ```
 
-Depois, verifique se a tabela `questions` apareceu:
+O script copia `./backups/cognix.backup` para o container `cognix_db`, executa `pg_restore --clean --if-exists` e valida a presença da tabela `questions`.
+
+7. Confira as tabelas no banco:
 
 ```powershell
 docker compose exec db psql -U postgres -d cognix -c "\dt"
@@ -31,21 +33,23 @@ docker compose exec db psql -U postgres -d cognix -c "\dt"
 Saída esperada:
 
 ```text
-                 List of tables
- Schema |           Name            | Type  |  Owner
---------+---------------------------+-------+----------
- public | question_attempt_history  | table | postgres
- public | question_attempts         | table | postgres
- public | questions                 | table | postgres
- public | training_session_history  | table | postgres
- public | training_sessions         | table | postgres
- public | training_summaries        | table | postgres
- public | training_summaries_user   | table | postgres
- public | users                     | table | postgres
-(8 rows)
+                    List of tables
+ Schema |           Name           | Type  |  Owner
+--------+--------------------------+-------+----------
+ public | question_attempt_history | table | postgres
+ public | question_attempts        | table | postgres
+ public | questions                | table | postgres
+ public | training_session_history | table | postgres
+ public | training_sessions        | table | postgres
+ public | training_summaries       | table | postgres
+ public | training_summaries_user  | table | postgres
+ public | user_avatar_inventory    | table | postgres
+ public | user_coin_ledger         | table | postgres
+ public | users                    | table | postgres
+(10 rows)
 ```
 
-7. Valide a API:
+8. Valide a API:
 
 - `http://localhost:8000/health`
 - `http://localhost:8000/docs`
@@ -60,7 +64,7 @@ POSTGRES_PORT=5432
 API_PORT=8000
 FIREBASE_CREDENTIALS=./secrets/firebase-service-account.json
 GEMINI_API_KEY=coloque_sua_chave_aqui
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3-flash-preview
 ```
 
 Observações:
@@ -68,32 +72,34 @@ Observações:
 - o `DATABASE_URL` é montado automaticamente pelo `docker compose` para o container da API
 - `POSTGRES_PORT` controla a porta exposta na sua máquina
 - dentro da rede Docker, a API sempre acessa o banco por `db:5432`
-- as tabelas internas usam os defaults definidos em `app/core/config.py`; só declare nomes customizados se quiser sobrescrever esses valores
 - as tabelas internas são criadas no startup, mas a tabela `questions` precisa vir do backup da base
 - as pastas `backups/` e `secrets/` podem ir para o repositório vazias com `.gitkeep`, mas o conteúdo real não deve subir
 
 ## Stack
 
-- Python 3.10+
+- Python 3.10+ no código
+- imagem Docker `python:3.13-slim`
 - FastAPI
-- SQLAlchemy
+- SQLAlchemy 2
 - PostgreSQL
-- Firebase Authentication
-- Gemini API
+- Firebase Admin SDK
+- Gemini API via HTTP
 
 ## Principais recursos
 
 - validação de `Firebase ID Token` em rotas protegidas
-- sincronização de usuário Firebase para tabela interna
+- sincronização automática do usuário Firebase para a tabela interna `users`
 - listagem e filtro de questões por disciplina, subcategoria, ano e busca textual
-- registro de tentativas do usuário
-- snapshot da última tentativa por `usuário + questão`
-- histórico completo de tentativas para métricas e personalização
+- remoção automática do campo sensível `gabarito` nas respostas de questões
+- registro de tentativas com snapshot da última resposta e histórico completo append-only
+- recompensa em moedas apenas na primeira resposta de cada `usuário + questão`
+- inventário de avatares e seleção de avatar equipado no perfil
+- score de perfil com breakdown, nível, consistência e `recent_index`
 - sessões de treino persistidas por `usuário + disciplina + subcategoria`
 - histórico de simulados concluídos para score, overview e reabertura de resultados
-- restauração de simulados em andamento em vários dispositivos
-- resumos e mapas mentais personalizados com base em desempenho real e contexto da subcategoria
-- padronização de datas em UTC com serialização consistente para a API
+- resumos base por subcategoria e resumos personalizados por usuário
+- geração opcional de mapas mentais personalizados com Gemini
+- persistência e serialização de datas em UTC
 
 ## Estrutura de dados interna
 
@@ -106,8 +112,25 @@ No startup, a API garante a criação das tabelas internas abaixo:
 - `training_session_history`
 - `training_summaries`
 - `training_summaries_user`
+- `user_coin_ledger`
+- `user_avatar_inventory`
 
 Os nomes reais podem ser alterados por variáveis de ambiente.
+
+### `users`
+
+Tabela de usuários internos sincronizada a partir do token do Firebase.
+
+Campos relevantes:
+
+- `firebase_uid`
+- `email`
+- `display_name`
+- `provider`
+- `coins_half_units`
+- `equipped_avatar_seed`
+- `created_at`
+- `updated_at`
 
 ### `question_attempts`
 
@@ -150,6 +173,7 @@ Essa tabela é a base para:
 - precisão histórica
 - insights por subcategoria
 - estatísticas dos resumos personalizados
+- cálculo de `score` e `recent_index`
 
 ### `training_sessions`
 
@@ -200,9 +224,77 @@ Essa tabela é a base para:
 - reabertura consistente da tela de resultados
 - métricas do score ligadas a simulados concluídos
 
+Observação:
+
+- um registro em `training_session_history` só é criado quando `state.completed == true` no payload salvo em `/sessions`
+
+### `training_summaries`
+
+Tabela de resumo base por `discipline + subcategory`.
+
+Campos principais:
+
+- `discipline`
+- `subcategory`
+- `payload_json`
+- `created_at`
+- `updated_at`
+
+### `training_summaries_user`
+
+Tabela de resumo personalizado por `user_id + discipline + subcategory`.
+
+Campos principais:
+
+- `user_id`
+- `firebase_uid`
+- `discipline`
+- `subcategory`
+- `payload_json`
+- `created_at`
+- `updated_at`
+
+### `user_coin_ledger`
+
+Tabela append-only do extrato de moedas do usuário.
+
+Campos principais:
+
+- `user_id`
+- `firebase_uid`
+- `reason`
+- `delta_half_units`
+- `balance_after_half_units`
+- `question_id`
+- `avatar_seed`
+- `created_at`
+
+Hoje os motivos gravados pelo backend incluem:
+
+- `question_answer_reward`
+- `avatar_purchase`
+
+### `user_avatar_inventory`
+
+Tabela de inventário de avatares desbloqueados ou comprados.
+
+Campos principais:
+
+- `user_id`
+- `firebase_uid`
+- `avatar_seed`
+- `acquired_via`
+- `cost_half_units`
+- `created_at`
+- `updated_at`
+
+Existe unicidade por:
+
+- `user_id + avatar_seed`
+
 ## Variáveis principais
 
-O `.env.example` mantém só as variáveis essenciais para subir o ambiente Docker:
+O `.env.example` mantém as variáveis mínimas para subir o ambiente Docker:
 
 - `POSTGRES_DB`
 - `POSTGRES_USER`
@@ -224,12 +316,14 @@ Além disso, o backend expõe opções avançadas em [`app/core/config.py`](app/
 - `SESSION_HISTORY_TABLE`
 - `SUMMARIES_TABLE`
 - `USER_SUMMARIES_TABLE`
+- `USER_COIN_LEDGER_TABLE`
+- `USER_AVATAR_INVENTORY_TABLE`
 - `ALLOWED_ORIGINS`
 - `FIREBASE_CREDENTIALS`
 - `GEMINI_API_KEY`
 - `GEMINI_MODEL`
 
-Defaults atuais:
+Defaults atuais no código:
 
 - tabela de questões: `questions`
 - usuários internos: `users`
@@ -239,8 +333,20 @@ Defaults atuais:
 - histórico de sessões concluídas: `training_session_history`
 - resumos globais: `training_summaries`
 - resumos por usuário: `training_summaries_user`
+- extrato de moedas: `user_coin_ledger`
+- inventário de avatares: `user_avatar_inventory`
+- CORS: `["*"]`
+- `GEMINI_MODEL`: `gemini-3-flash-preview`
+
+Exemplo de `ALLOWED_ORIGINS`:
+
+```env
+ALLOWED_ORIGINS=["http://localhost:3000","http://localhost:8080"]
+```
 
 ## Autenticação
+
+Todas as rotas da API exigem autenticação, exceto `GET /health`.
 
 Rotas protegidas esperam:
 
@@ -255,6 +361,60 @@ Fluxo:
 - sincroniza o usuário na tabela interna
 - usa o `user_id` interno nas tabelas relacionais
 
+Observação:
+
+- hoje não existe checagem adicional de papel/perfil por rota; o controle atual é apenas por token válido
+
+## Rotas principais
+
+### `users`
+
+- `POST /users/sync`: valida o token e devolve o usuário interno sincronizado
+- `GET /users/profile`: retorna score, breakdowns, progresso geral, moedas, avatar equipado, avatares possuídos e catálogo da loja
+- `POST /users/avatar/select`: equipa um avatar já possuído ou compra/equipa um novo avatar com base em `avatar_seed`
+
+### `questions`
+
+- `GET /questions`: lista questões com `limit`, `offset`, `subject`, `subcategory`, `year`, `search` e `include_total`
+- `GET /questions/disciplines`: lista disciplinas distintas da base
+- `GET /questions/subcategories`: lista subcategorias e total por subcategoria, com filtro opcional por disciplina
+- `GET /questions/by_ids`: busca por ids em ordem preservada via `ids=1,2,3`
+- `GET /questions/{question_id}`: retorna uma questão específica
+
+Observação:
+
+- o backend remove o campo `gabarito` de todas as respostas de questões
+
+### `attempts`
+
+- `POST /attempts`: registra a tentativa no histórico, atualiza o snapshot da última resposta e retorna `is_correct`, `correct_letter` e estado de moedas
+
+Observação:
+
+- moedas são concedidas apenas quando a questão ainda não possui tentativa anterior para aquele usuário
+
+### `sessions`
+
+- `POST /sessions`: salva ou atualiza o estado do treino para `discipline + subcategory`
+- `GET /sessions`: recupera o estado salvo de uma sessão
+- `GET /sessions/overview`: combina sessões em andamento com histórico de concluídas
+- `DELETE /sessions`: remove o snapshot atual da sessão
+
+### `summaries`
+
+- `GET /summaries`: retorna o resumo base da subcategoria e cria um fallback padrão se ele não existir
+- `GET /summaries/personal`: retorna resumo personalizado do usuário; se não houver sessão concluída, devolve um payload bloqueado
+- `GET /summaries/progress`: retorna progresso da subcategoria com base em tentativas e total de questões
+- `POST /summaries/auto_generate`: força a geração do resumo personalizado via Gemini
+- `POST /summaries`: cria ou atualiza manualmente o resumo base
+- `POST /summaries/bootstrap`: cria resumos base padrão para todos os pares distintos de `discipline + subcategory`
+
+Observações:
+
+- `GET /summaries/personal` só tenta gerar com IA quando `auto_generate=true` e `GEMINI_API_KEY` está configurada
+- `POST /summaries/auto_generate` retorna `409` se o usuário ainda não concluiu um simulado da subcategoria
+- se o Gemini não estiver configurado, `GET /summaries/personal` faz fallback para o resumo base, mas `POST /summaries/auto_generate` falha com `500`
+
 ## Datas e timezone
 
 A API usa utilitários centralizados em [`app/core/datetime_utils.py`](app/core/datetime_utils.py).
@@ -264,9 +424,9 @@ Padrão atual:
 - persistência em UTC
 - colunas internas com `DateTime(timezone=True)`
 - normalização com `ensure_utc(...)` antes de comparações sensíveis
-- serialização consistente para respostas JSON
+- serialização consistente para respostas JSON com `isoformat()`
 
-Isso foi feito para evitar deslocamentos de horário entre banco, backend e app Flutter.
+Isso evita deslocamentos de horário entre banco, backend e app Flutter.
 
 ## Documentação da API
 
@@ -274,15 +434,6 @@ Para detalhes das rotas, payloads e respostas, use o Swagger da aplicação:
 
 - `http://localhost:8000/docs`
 - `http://localhost:8000/redoc`
-
-## Observações importantes
-
-- o overview de sessões combina `training_sessions` (estado atual) com `training_session_history` (simulados concluídos)
-- a contagem de simulados concluídos vem de `training_session_history`
-- sessões são separadas por `disciplina + subcategoria`, evitando mistura entre simulados diferentes do mesmo usuário
-- o backend persiste o histórico completo de tentativas para corrigir métricas de consistência, precisão e insights
-- score e ritmo recente usam histórico real e podem regredir com inatividade
-- o backend foi ajustado para suportar restauração e reabertura de resultados em múltiplos dispositivos com a mesma conta
 
 ## Desenvolvimento
 
@@ -294,4 +445,11 @@ docker compose logs -f api
 docker compose logs -f db
 docker compose down
 docker compose down -v
+python -m unittest discover -s tests
 ```
+
+Cobertura atual de testes unitários incluída no repositório:
+
+- helpers da economia (`coins_from_half_units` e composição da loja de avatares)
+- cálculo de `recent_index`
+- estabilidade do score quando apenas o índice recente varia

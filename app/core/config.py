@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     session_history_table: str = 'training_session_history'
     summaries_table: str = 'training_summaries'
     user_summaries_table: str = 'training_summaries_user'
+    user_coin_ledger_table: str = 'user_coin_ledger'
+    user_avatar_inventory_table: str = 'user_avatar_inventory'
     allowed_origins: list[str] = ['*']
     firebase_credentials: str | None = None
     gemini_api_key: str | None = None

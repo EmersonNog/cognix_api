@@ -9,6 +9,8 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
+    inspect,
+    text,
 )
 
 from app.core.datetime_utils import utc_now
@@ -64,6 +66,8 @@ def get_users_table(table_name: str) -> Table:
         Column('email', String(320), nullable=True),
         Column('display_name', String(255), nullable=True),
         Column('provider', String(100), nullable=True),
+        Column('coins_half_units', Integer, nullable=False, default=0),
+        Column('equipped_avatar_seed', String(255), nullable=True),
         *_timestamp_columns(),
         extend_existing=True,
     )
@@ -208,6 +212,68 @@ def get_user_summaries_table(table_name: str) -> Table:
     )
 
 
+def get_user_coin_ledger_table(table_name: str) -> Table:
+    return Table(
+        table_name,
+        metadata,
+        _id_column(),
+        *_user_columns(),
+        Column('reason', String(100), nullable=False),
+        Column('delta_half_units', Integer, nullable=False),
+        Column('balance_after_half_units', Integer, nullable=False, default=0),
+        Column('question_id', Integer, nullable=True),
+        Column('avatar_seed', String(255), nullable=True),
+        *_timestamp_columns(),
+        Index(f'ix_{table_name}_user_created_at', 'user_id', 'created_at'),
+        extend_existing=True,
+    )
+
+
+def get_user_avatar_inventory_table(table_name: str) -> Table:
+    return Table(
+        table_name,
+        metadata,
+        _id_column(),
+        *_user_columns(),
+        Column('avatar_seed', String(255), nullable=False),
+        Column('acquired_via', String(100), nullable=False, default='purchase'),
+        Column('cost_half_units', Integer, nullable=False, default=0),
+        *_timestamp_columns(),
+        UniqueConstraint('user_id', 'avatar_seed', name=f'uq_{table_name}_user_seed'),
+        extend_existing=True,
+    )
+
+
+def ensure_internal_schema(engine, users_table_name: str) -> None:
+    inspector = inspect(engine)
+    if users_table_name not in inspector.get_table_names():
+        return
+
+    column_names = {
+        column['name']
+        for column in inspector.get_columns(users_table_name)
+    }
+    statements: list[str] = []
+
+    if 'coins_half_units' not in column_names:
+        statements.append(
+            f'ALTER TABLE {users_table_name} '
+            'ADD COLUMN IF NOT EXISTS coins_half_units INTEGER NOT NULL DEFAULT 0'
+        )
+    if 'equipped_avatar_seed' not in column_names:
+        statements.append(
+            f'ALTER TABLE {users_table_name} '
+            'ADD COLUMN IF NOT EXISTS equipped_avatar_seed VARCHAR(255)'
+        )
+
+    if not statements:
+        return
+
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
+
+
 def create_internal_tables(
     engine,
     users_table_name: str,
@@ -217,6 +283,8 @@ def create_internal_tables(
     session_history_table_name: str,
     summaries_table_name: str,
     user_summaries_table_name: str,
+    user_coin_ledger_table_name: str,
+    user_avatar_inventory_table_name: str,
 ) -> None:
     get_users_table(users_table_name)
     get_attempts_table(attempts_table_name)
@@ -225,6 +293,8 @@ def create_internal_tables(
     get_session_history_table(session_history_table_name)
     get_summaries_table(summaries_table_name)
     get_user_summaries_table(user_summaries_table_name)
+    get_user_coin_ledger_table(user_coin_ledger_table_name)
+    get_user_avatar_inventory_table(user_avatar_inventory_table_name)
     metadata.create_all(
         bind=engine,
         tables=[
@@ -235,5 +305,8 @@ def create_internal_tables(
             metadata.tables[session_history_table_name],
             metadata.tables[summaries_table_name],
             metadata.tables[user_summaries_table_name],
+            metadata.tables[user_coin_ledger_table_name],
+            metadata.tables[user_avatar_inventory_table_name],
         ],
     )
+    ensure_internal_schema(engine, users_table_name)

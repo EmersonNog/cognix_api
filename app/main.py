@@ -35,6 +35,8 @@ def _create_internal_tables() -> None:
         settings.session_history_table,
         settings.summaries_table,
         settings.user_summaries_table,
+        settings.user_coin_ledger_table,
+        settings.user_avatar_inventory_table,
     )
 
 
