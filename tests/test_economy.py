@@ -4,12 +4,12 @@ from unittest.mock import MagicMock, patch
 from fastapi import HTTPException
 
 from app.api.endpoints.attempts import upsert_attempt
-from app.services.economy.service import (
+from app.services.economy import (
     DEFAULT_AVATAR_SEED,
-    _build_avatar_store_payload,
     coins_from_half_units,
     select_profile_avatar,
 )
+from app.services.economy.catalog import build_avatar_store_payload
 
 
 class EconomyTests(unittest.TestCase):
@@ -19,7 +19,7 @@ class EconomyTests(unittest.TestCase):
         self.assertEqual(coins_from_half_units(7), 3.5)
 
     def test_avatar_store_marks_owned_equipped_and_affordable_flags(self) -> None:
-        items = _build_avatar_store_payload(
+        items = build_avatar_store_payload(
             coins_half_units=12,
             equipped_avatar_seed='avatar_3',
             owned_avatar_seeds=[DEFAULT_AVATAR_SEED, 'avatar_3'],
@@ -55,9 +55,9 @@ class EconomyTests(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 404)
         db.commit.assert_not_called()
 
-    @patch('app.services.economy.service._ensure_user_economy_defaults')
-    @patch('app.services.economy.service._lock_user_economy_row')
-    @patch('app.services.economy.service.fetch_user_economy_state')
+    @patch('app.services.economy.avatars.ensure_user_economy_defaults')
+    @patch('app.services.economy.avatars.lock_user_economy_row')
+    @patch('app.services.economy.avatars.fetch_user_economy_state')
     def test_avatar_purchase_returns_insufficient_funds_when_atomic_debit_fails(
         self,
         state_mock,

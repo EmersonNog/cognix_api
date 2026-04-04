@@ -5,8 +5,8 @@ import urllib.request
 from fastapi import HTTPException
 
 from app.core.config import settings
-from app.services.summaries.payloads import normalize_summary_payload
-from app.services.summaries.stats import fetch_question_samples, fetch_user_stats
+from .payloads import normalize_summary_payload
+from .stats import fetch_question_samples, fetch_user_stats
 
 
 def gemini_available() -> bool:

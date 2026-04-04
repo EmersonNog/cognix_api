@@ -1,25 +1,13 @@
-﻿from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session
 
 from app.core.datetime_utils import to_api_iso, utc_now
-from app.services.profile_score.constants import (
+from ..constants import (
     CONSISTENCY_DAYS_WINDOW,
     SUBCATEGORY_ATTENTION_ACCURACY_THRESHOLD,
 )
-from app.services.profile_score.repository import fetch_profile_metrics
-from app.services.profile_score.scoring import calculate_score_components
-
-
-
-def _serialize_questions_by_discipline(question_rows) -> list[dict]:
-    return [
-        {
-            'discipline': str(discipline or '').strip(),
-            'count': int(count or 0),
-        }
-        for discipline, count in question_rows
-        if str(discipline or '').strip()
-    ]
-
+from ..repository import fetch_profile_metrics
+from ..scoring import calculate_score_components
+from .serializers import serialize_questions_by_discipline
 
 
 def fetch_profile_score(db: Session, user_id: int) -> dict:
@@ -65,7 +53,7 @@ def fetch_profile_score(db: Session, user_id: int) -> dict:
         'last_activity_at': to_api_iso(metrics['last_activity_at']),
         'next_level': next_level,
         'points_to_next_level': points_to_next_level,
-        'questions_by_discipline': _serialize_questions_by_discipline(
+        'questions_by_discipline': serialize_questions_by_discipline(
             metrics['question_rows']
         ),
         'strongest_subcategory': metrics['strongest_subcategory'],
