@@ -23,7 +23,6 @@ from app.services.summaries import (
     gemini_available,
     generate_personalized_summary,
     has_completed_session,
-    insert_base_summary_if_missing,
     latest_attempt_at,
     load_summary_payload,
     locked_summary,
@@ -35,48 +34,10 @@ from app.services.summaries import (
     upsert_user_summary,
 )
 
+from .helpers import has_summary_nodes, load_base_summary
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-
-def _has_summary_nodes(payload: dict) -> bool:
-    nodes = payload.get('nodes')
-    return isinstance(nodes, list) and bool(nodes)
-
-
-def _build_default_payload(discipline: str, subcategory: str) -> dict:
-    return default_summary(discipline, subcategory)
-
-
-def _resolve_base_summary_payload(
-    db: Session,
-    discipline: str,
-    subcategory: str,
-    payload: dict,
-) -> dict:
-    if _has_summary_nodes(payload):
-        return payload
-
-    fallback = _build_default_payload(discipline, subcategory)
-    upsert_base_summary(db, discipline, subcategory, fallback)
-    return fallback
-
-
-def _load_base_summary(db: Session, discipline: str, subcategory: str) -> dict:
-    summaries = get_summaries_table(settings.summaries_table)
-    row = db.execute(
-        select(summaries)
-        .where(summaries.c.discipline == discipline)
-        .where(summaries.c.subcategory == subcategory)
-    ).mappings().first()
-
-    if row is None:
-        payload = _build_default_payload(discipline, subcategory)
-        insert_base_summary_if_missing(db, discipline, subcategory, payload)
-        return payload
-
-    payload = load_summary_payload(row['payload_json'])
-    return _resolve_base_summary_payload(db, discipline, subcategory, payload)
 
 
 @router.get('', dependencies=[Depends(get_current_user)])
@@ -85,7 +46,7 @@ def get_summary(
     subcategory: str = Query(...),
     db: Session = Depends(get_db),
 ) -> dict:
-    payload = _load_base_summary(db, discipline, subcategory)
+    payload = load_base_summary(db, discipline, subcategory)
     return attach_stats(payload, None)
 
 
@@ -118,19 +79,21 @@ def get_personal_summary(
     ).mappings().first()
 
     if row is not None:
-        latest_attempt = ensure_utc(latest_attempt_at(db, user_id, discipline, subcategory))
+        latest_attempt = ensure_utc(
+            latest_attempt_at(db, user_id, discipline, subcategory)
+        )
         updated_at = ensure_utc(row['updated_at'])
         if latest_attempt and updated_at and latest_attempt <= updated_at:
             payload = load_summary_payload(row['payload_json'])
-            if _has_summary_nodes(payload):
+            if has_summary_nodes(payload):
                 return attach_stats(payload, stats)
 
     if not auto_generate or not gemini_available():
-        return attach_stats(_load_base_summary(db, discipline, subcategory), stats)
+        return attach_stats(load_base_summary(db, discipline, subcategory), stats)
 
     payload, stats = generate_personalized_summary(db, user_id, discipline, subcategory)
-    if not _has_summary_nodes(payload):
-        payload = _load_base_summary(db, discipline, subcategory)
+    if not has_summary_nodes(payload):
+        payload = load_base_summary(db, discipline, subcategory)
     upsert_user_summary(db, user_id, firebase_uid, discipline, subcategory, payload)
     return attach_stats(payload, stats)
 
@@ -176,8 +139,8 @@ def auto_generate_summary(
         raise HTTPException(status_code=500, detail='Gemini not configured')
 
     payload, stats = generate_personalized_summary(db, user_id, discipline, subcategory)
-    if not _has_summary_nodes(payload):
-        payload = _load_base_summary(db, discipline, subcategory)
+    if not has_summary_nodes(payload):
+        payload = load_base_summary(db, discipline, subcategory)
     upsert_user_summary(db, user_id, firebase_uid, discipline, subcategory, payload)
     return attach_stats(payload, stats)
 

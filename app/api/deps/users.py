@@ -1,33 +1,20 @@
-from fastapi import Depends, HTTPException
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
-from app.core.security import verify_firebase_token
 from app.db.models import get_users_table
-from app.db.session import SessionLocal
-
-bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-def _get_internal_user(db: Session, firebase_uid: str):
+def get_internal_user(db: Session, firebase_uid: str):
     users_table = get_users_table(settings.users_table)
     return db.execute(
         select(users_table).where(users_table.c.firebase_uid == firebase_uid)
     ).mappings().first()
 
 
-def _sync_internal_user(db: Session, claims: dict) -> dict:
+def sync_internal_user(db: Session, claims: dict) -> dict:
     users_table = get_users_table(settings.users_table)
 
     firebase_uid = claims.get('uid') or claims.get('user_id') or claims.get('sub')
@@ -37,7 +24,7 @@ def _sync_internal_user(db: Session, claims: dict) -> dict:
     provider = claims.get('firebase', {}).get('sign_in_provider')
     email = claims.get('email')
     display_name = claims.get('name')
-    existing = _get_internal_user(db, firebase_uid)
+    existing = get_internal_user(db, firebase_uid)
 
     now = utc_now()
     if existing is None:
@@ -52,7 +39,7 @@ def _sync_internal_user(db: Session, claims: dict) -> dict:
             )
         )
         db.commit()
-        existing = _get_internal_user(db, firebase_uid)
+        existing = get_internal_user(db, firebase_uid)
     else:
         updates = {}
         if existing.get('email') != email:
@@ -70,22 +57,7 @@ def _sync_internal_user(db: Session, claims: dict) -> dict:
                 .values(**updates)
             )
             db.commit()
-            existing = _get_internal_user(db, firebase_uid)
+            existing = get_internal_user(db, firebase_uid)
 
     claims['internal_user'] = dict(existing) if existing else None
     return claims
-
-
-def get_current_user(
-    db: Session = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-) -> dict:
-    if credentials is None:
-        raise HTTPException(status_code=401, detail='Missing Authorization')
-
-    try:
-        claims = verify_firebase_token(credentials.credentials)
-    except Exception:
-        raise HTTPException(status_code=401, detail='Invalid token')
-
-    return _sync_internal_user(db, claims)
