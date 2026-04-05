@@ -1,9 +1,10 @@
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.datetime_utils import local_day_bounds_in_utc, local_today
 from app.db.models import get_attempt_history_table, get_session_history_table
 
 from .constants import FOCUS_PROGRESS_WEIGHTS
@@ -63,9 +64,10 @@ def fetch_weekly_metrics(
     user_id: int,
     today: date | None = None,
 ) -> dict[str, object]:
-    current_day = today or datetime.now(timezone.utc).date()
+    current_day = today or local_today()
     week_start, week_end = week_bounds(current_day)
-    week_start_at = datetime.combine(week_start, time.min, tzinfo=timezone.utc)
+    week_start_at, _ = local_day_bounds_in_utc(week_start)
+    _, week_end_exclusive_at = local_day_bounds_in_utc(week_end)
 
     attempt_history = get_attempt_history_table(settings.attempt_history_table)
     session_history = get_session_history_table(settings.session_history_table)
@@ -76,6 +78,7 @@ def fetch_weekly_metrics(
             .select_from(attempt_history)
             .where(attempt_history.c.user_id == user_id)
             .where(attempt_history.c.answered_at >= week_start_at)
+            .where(attempt_history.c.answered_at < week_end_exclusive_at)
         ).scalar()
         or 0
     )
@@ -86,6 +89,7 @@ def fetch_weekly_metrics(
             .select_from(session_history)
             .where(session_history.c.user_id == user_id)
             .where(session_history.c.completed_at >= week_start_at)
+            .where(session_history.c.completed_at < week_end_exclusive_at)
         ).scalar()
         or 0
     )
@@ -97,6 +101,7 @@ def fetch_weekly_metrics(
             select(attempt_history.c.answered_at)
             .where(attempt_history.c.user_id == user_id)
             .where(attempt_history.c.answered_at >= week_start_at)
+            .where(attempt_history.c.answered_at < week_end_exclusive_at)
         ).all()
         if answered_at is not None
     }
@@ -106,6 +111,7 @@ def fetch_weekly_metrics(
             select(session_history.c.completed_at)
             .where(session_history.c.user_id == user_id)
             .where(session_history.c.completed_at >= week_start_at)
+            .where(session_history.c.completed_at < week_end_exclusive_at)
         ).all()
         if completed_at is not None
     }

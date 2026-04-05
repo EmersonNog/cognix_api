@@ -24,5 +24,6 @@ class Settings(BaseSettings):
     firebase_clock_skew_seconds: int = 5
     gemini_api_key: str | None = None
     gemini_model: str = 'gemini-3-flash-preview'
+    app_timezone: str = 'America/Sao_Paulo'
 
 settings = Settings()
