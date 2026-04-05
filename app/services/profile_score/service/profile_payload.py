@@ -49,6 +49,7 @@ def fetch_profile_score(db: Session, user_id: int) -> dict:
         'completed_sessions': metrics['completed_sessions'],
         'total_study_seconds': metrics['total_study_seconds'],
         'active_days_last_30': metrics['active_days_last_30'],
+        'current_streak_days': metrics['current_streak_days'],
         'consistency_window_days': CONSISTENCY_DAYS_WINDOW,
         'last_activity_at': to_api_iso(metrics['last_activity_at']),
         'next_level': next_level,

@@ -19,9 +19,16 @@ from ..constants import (
     SCORE_SIMULATION_WINDOW_DAYS,
 )
 
-from .activity import count_active_days, latest_timestamp, recent_attempt_outcomes
+from .activity import (
+    compute_current_streak_days,
+    count_active_days,
+    fetch_activity_dates,
+    latest_timestamp,
+    recent_attempt_outcomes,
+)
 from .insights import build_subcategory_insights
 from .sessions import (
+    fallback_completed_session_dates,
     fallback_completed_session_metrics,
     latest_session_accuracy_percent,
 )
@@ -167,6 +174,29 @@ def fetch_profile_metrics(db: Session, user_id: int) -> dict:
         ).scalar(),
         last_completed_session_at,
     )
+    activity_dates = fetch_activity_dates(
+        db,
+        attempt_history,
+        session_history,
+        user_id,
+    )
+    if completed_sessions > 0 and not any(
+        date_value == last_completed_session_at.date()
+        for date_value in activity_dates
+        if last_completed_session_at is not None
+    ):
+        activity_dates.extend(
+            fallback_completed_session_dates(
+                db,
+                sessions,
+                user_id,
+            )
+        )
+
+    current_streak_days = compute_current_streak_days(
+        activity_dates,
+        today=now.date(),
+    )
 
     return {
         'total_questions': total_questions,
@@ -179,6 +209,7 @@ def fetch_profile_metrics(db: Session, user_id: int) -> dict:
         'completed_sessions': completed_sessions,
         'total_study_seconds': total_study_seconds,
         'last_activity_at': last_activity_at,
+        'current_streak_days': current_streak_days,
         'question_rows': question_rows,
         'strongest_subcategory': strongest_subcategory,
         'weakest_subcategory': weakest_subcategory,

@@ -1,3 +1,5 @@
+from datetime import date, datetime, timedelta
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -19,6 +21,57 @@ def count_active_days(
         ).scalar()
         or 0
     )
+
+
+def fetch_activity_dates(
+    db: Session,
+    attempt_history,
+    session_history,
+    user_id: int,
+) -> list[date]:
+    attempt_dates = _fetch_distinct_calendar_dates(
+        db,
+        attempt_history.c.answered_at,
+        attempt_history.c.user_id,
+        user_id,
+    )
+    session_dates = _fetch_distinct_calendar_dates(
+        db,
+        session_history.c.completed_at,
+        session_history.c.user_id,
+        user_id,
+    )
+
+    return sorted({*attempt_dates, *session_dates}, reverse=True)
+
+
+def compute_current_streak_days(
+    activity_dates: list[date],
+    *,
+    today: date,
+) -> int:
+    unique_dates = sorted(set(activity_dates), reverse=True)
+    if not unique_dates:
+        return 0
+
+    latest_activity = unique_dates[0]
+    if latest_activity < today - timedelta(days=1):
+        return 0
+
+    streak = 1
+    previous_day = latest_activity
+
+    for current_day in unique_dates[1:]:
+        expected_previous = previous_day - timedelta(days=1)
+        if current_day == expected_previous:
+            streak += 1
+            previous_day = current_day
+            continue
+
+        if current_day < expected_previous:
+            break
+
+    return streak
 
 
 def recent_attempt_outcomes(
@@ -44,3 +97,38 @@ def latest_timestamp(*values):
     if not valid:
         return None
     return max(valid)
+
+
+def _fetch_distinct_calendar_dates(
+    db: Session,
+    timestamp_column,
+    user_column,
+    user_id: int,
+) -> list[date]:
+    rows = db.execute(
+        select(func.date(timestamp_column))
+        .where(user_column == user_id)
+        .where(timestamp_column.is_not(None))
+        .distinct()
+    ).all()
+
+    dates: list[date] = []
+    for (raw_value,) in rows:
+        coerced = _coerce_calendar_date(raw_value)
+        if coerced is not None:
+            dates.append(coerced)
+
+    return dates
+
+
+def _coerce_calendar_date(raw_value: object) -> date | None:
+    if isinstance(raw_value, datetime):
+        return raw_value.date()
+    if isinstance(raw_value, date):
+        return raw_value
+    if isinstance(raw_value, str):
+        try:
+            return date.fromisoformat(raw_value)
+        except ValueError:
+            return None
+    return None

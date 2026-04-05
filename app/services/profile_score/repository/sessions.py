@@ -1,4 +1,5 @@
 import json
+from datetime import date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -72,6 +73,30 @@ def fallback_completed_session_metrics(
     }
 
 
+def fallback_completed_session_dates(
+    db: Session,
+    sessions,
+    user_id: int,
+) -> list[date]:
+    rows = db.execute(
+        select(sessions.c.state_json, sessions.c.updated_at)
+        .where(sessions.c.user_id == user_id)
+        .order_by(sessions.c.updated_at.desc())
+    ).all()
+
+    dates: set[date] = set()
+    for state_json, updated_at in rows:
+        payload = parse_state(state_json)
+        if payload.get('completed') is not True:
+            continue
+
+        coerced = _coerce_calendar_date(updated_at)
+        if coerced is not None:
+            dates.add(coerced)
+
+    return sorted(dates, reverse=True)
+
+
 def latest_session_accuracy_percent(
     db: Session,
     session_history,
@@ -97,3 +122,11 @@ def latest_session_accuracy_percent(
         int(latest_total or 0),
         int(latest_correct or 0),
     )
+
+
+def _coerce_calendar_date(raw_value: object) -> date | None:
+    if isinstance(raw_value, datetime):
+        return raw_value.date()
+    if isinstance(raw_value, date):
+        return raw_value
+    return None
