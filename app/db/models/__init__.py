@@ -9,6 +9,7 @@ from .tables import (
     get_summaries_table,
     get_user_avatar_inventory_table,
     get_user_coin_ledger_table,
+    get_user_study_plan_table,
     get_user_summaries_table,
     get_users_table,
 )
@@ -24,6 +25,7 @@ __all__ = [
     'get_summaries_table',
     'get_user_avatar_inventory_table',
     'get_user_coin_ledger_table',
+    'get_user_study_plan_table',
     'get_user_summaries_table',
     'get_users_table',
     'metadata',

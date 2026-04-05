@@ -9,6 +9,7 @@ from .tables import (
     get_summaries_table,
     get_user_avatar_inventory_table,
     get_user_coin_ledger_table,
+    get_user_study_plan_table,
     get_user_summaries_table,
     get_users_table,
 )
@@ -55,6 +56,7 @@ def create_internal_tables(
     user_summaries_table_name: str,
     user_coin_ledger_table_name: str,
     user_avatar_inventory_table_name: str,
+    study_plan_table_name: str,
 ) -> None:
     get_users_table(users_table_name)
     get_attempts_table(attempts_table_name)
@@ -65,6 +67,7 @@ def create_internal_tables(
     get_user_summaries_table(user_summaries_table_name)
     get_user_coin_ledger_table(user_coin_ledger_table_name)
     get_user_avatar_inventory_table(user_avatar_inventory_table_name)
+    get_user_study_plan_table(study_plan_table_name)
     metadata.create_all(
         bind=engine,
         tables=[
@@ -77,6 +80,7 @@ def create_internal_tables(
             metadata.tables[user_summaries_table_name],
             metadata.tables[user_coin_ledger_table_name],
             metadata.tables[user_avatar_inventory_table_name],
+            metadata.tables[study_plan_table_name],
         ],
     )
     ensure_internal_schema(engine, users_table_name)

@@ -37,6 +37,7 @@ def _create_internal_tables() -> None:
         settings.user_summaries_table,
         settings.user_coin_ledger_table,
         settings.user_avatar_inventory_table,
+        settings.study_plan_table,
     )
 
 

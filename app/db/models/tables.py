@@ -214,3 +214,21 @@ def get_user_avatar_inventory_table(table_name: str) -> Table:
         UniqueConstraint('user_id', 'avatar_seed', name=f'uq_{table_name}_user_seed'),
         extend_existing=True,
     )
+
+
+def get_user_study_plan_table(table_name: str) -> Table:
+    return Table(
+        table_name,
+        metadata,
+        _id_column(),
+        *_user_columns(),
+        Column('study_days_per_week', Integer, nullable=False, default=5),
+        Column('minutes_per_day', Integer, nullable=False, default=60),
+        Column('weekly_questions_goal', Integer, nullable=False, default=80),
+        Column('focus_mode', String(50), nullable=False, default='constancia'),
+        Column('preferred_period', String(50), nullable=False, default='flexivel'),
+        Column('priority_disciplines_json', Text, nullable=False, default='[]'),
+        *_timestamp_columns(),
+        UniqueConstraint('user_id', name=f'uq_{table_name}_user'),
+        extend_existing=True,
+    )
