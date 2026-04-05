@@ -103,7 +103,7 @@ class HomeRecommendationsTests(unittest.TestCase):
         self.assertEqual(payload['items'][0]['source'], 'coverage_gap')
         self.assertEqual(
             payload['subtitle'],
-            'Priorizando subcategorias para ampliar cobertura hoje',
+            'Priorizando disciplinas para ampliar cobertura hoje',
         )
 
     @patch('app.services.recommendations.service.fetch_question_total')

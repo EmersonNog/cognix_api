@@ -124,6 +124,79 @@ def latest_session_accuracy_percent(
     )
 
 
+def fetch_recent_completed_session_items(
+    db: Session,
+    session_history,
+    user_id: int,
+    *,
+    limit: int = 3,
+) -> list[dict[str, object]]:
+    if limit <= 0:
+        return []
+
+    rows = db.execute(
+        select(
+            session_history.c.discipline,
+            session_history.c.subcategory,
+            session_history.c.correct_answers,
+            session_history.c.answered_questions,
+            session_history.c.total_questions,
+            session_history.c.completed_at,
+        )
+        .where(session_history.c.user_id == user_id)
+        .order_by(session_history.c.completed_at.desc(), session_history.c.id.desc())
+    ).mappings().all()
+
+    items: list[dict[str, object]] = []
+    seen: set[tuple[str, str]] = set()
+    for row in rows:
+        item = build_recent_completed_session_item(row)
+        if item is not None:
+            key = recent_completed_session_key(item)
+            if key in seen:
+                continue
+            items.append(item)
+            seen.add(key)
+            if len(items) >= limit:
+                break
+
+    return items
+
+
+def build_recent_completed_session_item(
+    row: dict[str, object],
+) -> dict[str, object] | None:
+    discipline = str(row.get('discipline') or '').strip()
+    subcategory = str(row.get('subcategory') or '').strip()
+    if not discipline or not subcategory:
+        return None
+
+    answered_questions = coerce_non_negative_int(row.get('answered_questions'))
+    total_questions = coerce_non_negative_int(row.get('total_questions'))
+    correct_answers = coerce_non_negative_int(row.get('correct_answers'))
+
+    return {
+        'discipline': discipline,
+        'subcategory': subcategory,
+        'answered_questions': answered_questions,
+        'total_questions': total_questions,
+        'correct_answers': correct_answers,
+        'accuracy_percent': session_accuracy_percent(
+            answered_questions,
+            total_questions,
+            correct_answers,
+        ),
+        'completed_at': row.get('completed_at'),
+    }
+
+
+def recent_completed_session_key(item: dict[str, object]) -> tuple[str, str]:
+    return (
+        str(item.get('discipline') or '').strip().casefold(),
+        str(item.get('subcategory') or '').strip().casefold(),
+    )
+
+
 def _coerce_calendar_date(raw_value: object) -> date | None:
     if isinstance(raw_value, datetime):
         return raw_value.date()

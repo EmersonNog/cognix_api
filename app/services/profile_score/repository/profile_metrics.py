@@ -30,6 +30,7 @@ from .activity import (
 from .insights import build_subcategory_insights
 from .sessions import (
     fallback_completed_session_metrics,
+    fetch_recent_completed_session_items,
     latest_session_accuracy_percent,
 )
 
@@ -188,6 +189,11 @@ def fetch_profile_metrics(db: Session, user_id: int) -> dict:
         activity_dates,
         today=now.date(),
     )
+    recent_completed_sessions_preview = fetch_recent_completed_session_items(
+        db,
+        session_history,
+        user_id,
+    )
 
     return {
         'total_questions': total_questions,
@@ -202,6 +208,7 @@ def fetch_profile_metrics(db: Session, user_id: int) -> dict:
         'last_activity_at': last_activity_at,
         'current_streak_days': current_streak_days,
         'recent_activity_window': recent_activity_window,
+        'recent_completed_sessions_preview': recent_completed_sessions_preview,
         'question_rows': question_rows,
         'strongest_subcategory': strongest_subcategory,
         'weakest_subcategory': weakest_subcategory,

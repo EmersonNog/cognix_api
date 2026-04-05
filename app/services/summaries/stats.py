@@ -12,9 +12,9 @@ def derive_error_patterns(stats: dict) -> list[str]:
     accuracy = float(stats.get('accuracy_percent') or 0.0)
 
     if accuracy < 40:
-        patterns.append('Baixa precisao geral na subcategoria, indicando falhas de base.')
+        patterns.append('Baixa precisão geral na disciplina, indicando falhas de base.')
     elif accuracy < 65:
-        patterns.append('Desempenho instavel, com lacunas em conceitos centrais.')
+        patterns.append('Desempenho instável, com lacunas em conceitos centrais.')
 
     return patterns[:4]
 

@@ -51,6 +51,13 @@ def fetch_profile_score(db: Session, user_id: int) -> dict:
         'active_days_last_30': metrics['active_days_last_30'],
         'current_streak_days': metrics['current_streak_days'],
         'recent_activity_window': metrics['recent_activity_window'],
+        'recent_completed_sessions_preview': [
+            {
+                **item,
+                'completed_at': to_api_iso(item.get('completed_at')),
+            }
+            for item in metrics['recent_completed_sessions_preview']
+        ],
         'consistency_window_days': CONSISTENCY_DAYS_WINDOW,
         'last_activity_at': to_api_iso(metrics['last_activity_at']),
         'next_level': next_level,

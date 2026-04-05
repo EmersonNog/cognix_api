@@ -23,7 +23,7 @@ def build_weakest_recommendation(
         'discipline': discipline,
         'subcategory': subcategory,
         'description': (
-            'Subcategoria com menor precisao recente e espaco claro para reforco.'
+            'Disciplina com menor precisão recente e espaco claro para reforço.'
         ),
         'badge_label': badge_label(badge_tone),
         'badge_tone': badge_tone,
@@ -86,16 +86,16 @@ def description_for_candidate(
 ) -> str:
     if source == 'priority_discipline':
         if total_attempts <= 0:
-            return 'Disciplina prioritaria do seu plano ainda sem cobertura recente.'
+            return 'Disciplina prioritária do seu plano ainda sem cobertura recente.'
         if is_attention_accuracy(accuracy_percent):
-            return 'Disciplina prioritaria com desempenho abaixo do ideal nesta subcategoria.'
-        return 'Boa frente para manter ritmo e consolidar repertorio hoje.'
+            return 'Disciplina prioritária com desempenho abaixo do ideal nesta disciplina.'
+        return 'Boa frente para manter ritmo e consolidar repertório hoje.'
 
     if total_attempts <= 0:
-        return 'Boa opcao para abrir cobertura e ganhar tracao nesta frente.'
+        return 'Boa opção para abrir cobertura e ganhar tração nesta frente.'
     if is_attention_accuracy(accuracy_percent):
-        return 'Subcategoria com espaco para reforco antes de avancar para a proxima etapa.'
-    return 'Boa opcao para ampliar cobertura e manter consistencia hoje.'
+        return 'Disciplina com espaço para reforço antes de avançar para a próxima etapa.'
+    return 'Boa opção para ampliar cobertura e manter consistência hoje.'
 
 
 def reason_label_for_candidate(
@@ -108,13 +108,13 @@ def reason_label_for_candidate(
         if total_attempts <= 0:
             return 'Sem cobertura recente'
         if is_attention_accuracy(accuracy_percent):
-            return 'Prioridade com baixa precisao'
+            return 'Prioridade com baixa precisão'
         return 'Prioridade do plano'
 
     if total_attempts <= 0:
         return 'Ampliar cobertura'
     if is_attention_accuracy(accuracy_percent):
-        return 'Precisao abaixo do ideal'
+        return 'Precisão abaixo do ideal'
     return 'Manter ritmo'
 
 
@@ -166,9 +166,9 @@ def build_section_subtitle(
     has_priority = any(item.get('source') == 'priority_discipline' for item in items)
 
     if has_weakest and has_priority:
-        return 'Priorizando pontos de atencao e frentes do seu plano'
+        return 'Priorizando pontos de atenção e frentes do seu plano'
     if has_weakest:
-        return 'Priorizando subcategorias que pedem mais atencao agora'
+        return 'Priorizando disciplinas que pedem mais atenção agora'
     if has_priority or has_priority_disciplines:
         return 'Priorizando disciplinas marcadas no seu plano'
-    return 'Priorizando subcategorias para ampliar cobertura hoje'
+    return 'Priorizando disciplinas para ampliar cobertura hoje'
