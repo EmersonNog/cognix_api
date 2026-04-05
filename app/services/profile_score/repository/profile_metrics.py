@@ -20,6 +20,7 @@ from ..constants import (
 )
 
 from .activity import (
+    build_recent_activity_window,
     compute_current_streak_days,
     count_active_days,
     fetch_activity_dates,
@@ -28,7 +29,6 @@ from .activity import (
 )
 from .insights import build_subcategory_insights
 from .sessions import (
-    fallback_completed_session_dates,
     fallback_completed_session_metrics,
     latest_session_accuracy_percent,
 )
@@ -142,7 +142,7 @@ def fetch_profile_metrics(db: Session, user_id: int) -> dict:
         ).scalar()
         or 0
     )
-    last_completed_session_at = db.execute(
+    history_last_completed_session_at = db.execute(
         select(func.max(session_history.c.completed_at))
         .select_from(session_history)
         .where(session_history.c.user_id == user_id)
@@ -158,7 +158,6 @@ def fetch_profile_metrics(db: Session, user_id: int) -> dict:
         completed_sessions = fallback_metrics['completed_sessions']
         total_study_seconds = fallback_metrics['total_study_seconds']
         recent_completed_sessions = fallback_metrics['recent_completed_sessions']
-        last_completed_session_at = fallback_metrics['last_completed_at']
 
     latest_session_accuracy = latest_session_accuracy_percent(
         db,
@@ -172,7 +171,7 @@ def fetch_profile_metrics(db: Session, user_id: int) -> dict:
             .select_from(attempt_history)
             .where(attempt_history.c.user_id == user_id)
         ).scalar(),
-        last_completed_session_at,
+        history_last_completed_session_at,
     )
     activity_dates = fetch_activity_dates(
         db,
@@ -180,20 +179,12 @@ def fetch_profile_metrics(db: Session, user_id: int) -> dict:
         session_history,
         user_id,
     )
-    if completed_sessions > 0 and not any(
-        date_value == last_completed_session_at.date()
-        for date_value in activity_dates
-        if last_completed_session_at is not None
-    ):
-        activity_dates.extend(
-            fallback_completed_session_dates(
-                db,
-                sessions,
-                user_id,
-            )
-        )
 
     current_streak_days = compute_current_streak_days(
+        activity_dates,
+        today=now.date(),
+    )
+    recent_activity_window = build_recent_activity_window(
         activity_dates,
         today=now.date(),
     )
@@ -210,6 +201,7 @@ def fetch_profile_metrics(db: Session, user_id: int) -> dict:
         'total_study_seconds': total_study_seconds,
         'last_activity_at': last_activity_at,
         'current_streak_days': current_streak_days,
+        'recent_activity_window': recent_activity_window,
         'question_rows': question_rows,
         'strongest_subcategory': strongest_subcategory,
         'weakest_subcategory': weakest_subcategory,

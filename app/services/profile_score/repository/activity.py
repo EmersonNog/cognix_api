@@ -74,6 +74,27 @@ def compute_current_streak_days(
     return streak
 
 
+def build_recent_activity_window(
+    activity_dates: list[date],
+    *,
+    today: date,
+    window_days: int = 7,
+) -> list[dict[str, object]]:
+    unique_dates = set(activity_dates)
+    start_day = today - timedelta(days=max(window_days - 1, 0))
+
+    return [
+        {
+            'date': current_day.isoformat(),
+            'active': current_day in unique_dates,
+            'is_today': current_day == today,
+        }
+        for current_day in (
+            start_day + timedelta(days=offset) for offset in range(window_days)
+        )
+    ]
+
+
 def recent_attempt_outcomes(
     db: Session,
     attempt_history,
