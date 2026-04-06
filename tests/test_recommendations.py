@@ -5,16 +5,18 @@ from app.services.recommendations.service import fetch_home_recommendations
 
 
 class HomeRecommendationsTests(unittest.TestCase):
-    @patch('app.services.recommendations.service.fetch_question_total')
-    @patch('app.services.recommendations.service._fetch_subcategory_candidates')
+    @patch('app.services.recommendations.service._question_total_from_snapshot')
+    @patch('app.services.recommendations.service._build_subcategory_candidates')
+    @patch('app.services.recommendations.service._fetch_candidate_snapshot')
     @patch('app.services.recommendations.service.fetch_study_plan_row')
     @patch('app.services.recommendations.service.fetch_profile_metrics')
     def test_recommendations_prioritize_weakest_then_plan_disciplines(
         self,
         fetch_profile_metrics_mock,
         fetch_study_plan_row_mock,
-        fetch_subcategory_candidates_mock,
-        fetch_question_total_mock,
+        fetch_candidate_snapshot_mock,
+        build_subcategory_candidates_mock,
+        question_total_from_snapshot_mock,
     ) -> None:
         fetch_profile_metrics_mock.return_value = {
             'weakest_subcategory': {
@@ -27,8 +29,9 @@ class HomeRecommendationsTests(unittest.TestCase):
         fetch_study_plan_row_mock.return_value = {
             'priority_disciplines_json': '["Matematica e suas Tecnologias", "Ciencias Humanas e suas Tecnologias"]'
         }
-        fetch_question_total_mock.return_value = 14
-        fetch_subcategory_candidates_mock.side_effect = [
+        fetch_candidate_snapshot_mock.return_value = object()
+        question_total_from_snapshot_mock.return_value = 14
+        build_subcategory_candidates_mock.side_effect = [
             [
                 {
                     'discipline': 'Matematica e suas Tecnologias',
@@ -66,21 +69,25 @@ class HomeRecommendationsTests(unittest.TestCase):
             payload['subtitle'],
             'Priorizando pontos de atenção e frentes do seu plano',
         )
+        fetch_candidate_snapshot_mock.assert_called_once()
 
-    @patch('app.services.recommendations.service._fetch_subcategory_candidates')
+    @patch('app.services.recommendations.service._build_subcategory_candidates')
+    @patch('app.services.recommendations.service._fetch_candidate_snapshot')
     @patch('app.services.recommendations.service.fetch_study_plan_row')
     @patch('app.services.recommendations.service.fetch_profile_metrics')
     def test_recommendations_fall_back_to_global_coverage_when_needed(
         self,
         fetch_profile_metrics_mock,
         fetch_study_plan_row_mock,
-        fetch_subcategory_candidates_mock,
+        fetch_candidate_snapshot_mock,
+        build_subcategory_candidates_mock,
     ) -> None:
         fetch_profile_metrics_mock.return_value = {
             'weakest_subcategory': None,
         }
         fetch_study_plan_row_mock.return_value = None
-        fetch_subcategory_candidates_mock.return_value = [
+        fetch_candidate_snapshot_mock.return_value = object()
+        build_subcategory_candidates_mock.return_value = [
             {
                 'discipline': 'Linguagens, Codigos e suas Tecnologias',
                 'subcategory': 'Gramatica',
@@ -105,17 +112,20 @@ class HomeRecommendationsTests(unittest.TestCase):
             payload['subtitle'],
             'Priorizando disciplinas para ampliar cobertura hoje',
         )
+        fetch_candidate_snapshot_mock.assert_called_once()
 
-    @patch('app.services.recommendations.service.fetch_question_total')
-    @patch('app.services.recommendations.service._fetch_subcategory_candidates')
+    @patch('app.services.recommendations.service._question_total_from_snapshot')
+    @patch('app.services.recommendations.service._build_subcategory_candidates')
+    @patch('app.services.recommendations.service._fetch_candidate_snapshot')
     @patch('app.services.recommendations.service.fetch_study_plan_row')
     @patch('app.services.recommendations.service.fetch_profile_metrics')
     def test_recommendations_skip_priority_duplicates_of_weakest(
         self,
         fetch_profile_metrics_mock,
         fetch_study_plan_row_mock,
-        fetch_subcategory_candidates_mock,
-        fetch_question_total_mock,
+        fetch_candidate_snapshot_mock,
+        build_subcategory_candidates_mock,
+        question_total_from_snapshot_mock,
     ) -> None:
         fetch_profile_metrics_mock.return_value = {
             'weakest_subcategory': {
@@ -128,8 +138,9 @@ class HomeRecommendationsTests(unittest.TestCase):
         fetch_study_plan_row_mock.return_value = {
             'priority_disciplines_json': '["Matematica e suas Tecnologias"]'
         }
-        fetch_question_total_mock.return_value = 10
-        fetch_subcategory_candidates_mock.side_effect = [
+        fetch_candidate_snapshot_mock.return_value = object()
+        question_total_from_snapshot_mock.return_value = 10
+        build_subcategory_candidates_mock.side_effect = [
             [
                 {
                     'discipline': 'Matematica e suas Tecnologias',
@@ -155,6 +166,7 @@ class HomeRecommendationsTests(unittest.TestCase):
             [item['subcategory'] for item in payload['items']],
             ['Probabilidade', 'Funcoes'],
         )
+        fetch_candidate_snapshot_mock.assert_called_once()
 
 
 if __name__ == '__main__':

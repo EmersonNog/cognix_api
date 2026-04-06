@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
@@ -6,19 +8,24 @@ from app.db.models import get_attempt_history_table, get_questions_table
 from app.db.session import engine
 
 
-def fetch_subcategory_candidates(
+@dataclass(frozen=True)
+class CandidateSnapshot:
+    question_rows: list[object]
+    attempt_rows: list[object]
+
+
+def fetch_candidate_snapshot(
     db: Session,
     *,
     user_id: int,
-    discipline: str | None = None,
-) -> list[dict[str, object]]:
+) -> CandidateSnapshot:
     questions = get_questions_table(engine, settings.question_table)
     attempt_history = get_attempt_history_table(settings.attempt_history_table)
 
     if 'disciplina' not in questions.c or 'subcategoria' not in questions.c:
-        return []
+        return CandidateSnapshot(question_rows=[], attempt_rows=[])
 
-    question_stmt = (
+    question_rows = db.execute(
         select(
             questions.c.disciplina.label('discipline'),
             questions.c.subcategoria.label('subcategory'),
@@ -26,15 +33,13 @@ def fetch_subcategory_candidates(
         )
         .where(questions.c.disciplina.is_not(None))
         .where(questions.c.subcategoria.is_not(None))
-    )
-    if discipline:
-        question_stmt = question_stmt.where(questions.c.disciplina == discipline)
-    question_stmt = question_stmt.group_by(
-        questions.c.disciplina,
-        questions.c.subcategoria,
-    )
+        .group_by(
+            questions.c.disciplina,
+            questions.c.subcategoria,
+        )
+    ).all()
 
-    attempt_stmt = (
+    attempt_rows = db.execute(
         select(
             attempt_history.c.discipline.label('discipline'),
             attempt_history.c.subcategory.label('subcategory'),
@@ -46,33 +51,61 @@ def fetch_subcategory_candidates(
         .where(attempt_history.c.user_id == user_id)
         .where(attempt_history.c.discipline.is_not(None))
         .where(attempt_history.c.subcategory.is_not(None))
-    )
-    if discipline:
-        attempt_stmt = attempt_stmt.where(attempt_history.c.discipline == discipline)
-    attempt_stmt = attempt_stmt.group_by(
-        attempt_history.c.discipline,
-        attempt_history.c.subcategory,
+        .group_by(
+            attempt_history.c.discipline,
+            attempt_history.c.subcategory,
+        )
+    ).all()
+
+    return CandidateSnapshot(
+        question_rows=list(question_rows),
+        attempt_rows=list(attempt_rows),
     )
 
-    question_rows = db.execute(question_stmt).all()
-    attempt_rows = db.execute(attempt_stmt).all()
+
+def fetch_subcategory_candidates(
+    db: Session,
+    *,
+    user_id: int,
+    discipline: str | None = None,
+) -> list[dict[str, object]]:
+    snapshot = fetch_candidate_snapshot(db, user_id=user_id)
+    return build_subcategory_candidates(snapshot, discipline=discipline)
+
+
+def build_subcategory_candidates(
+    snapshot: CandidateSnapshot,
+    *,
+    discipline: str | None = None,
+) -> list[dict[str, object]]:
+    question_rows = [
+        row
+        for row in snapshot.question_rows
+        if discipline is None or _row_value(row, 'discipline', 0) == discipline
+    ]
+    attempt_rows = [
+        row
+        for row in snapshot.attempt_rows
+        if discipline is None or _row_value(row, 'discipline', 0) == discipline
+    ]
 
     attempt_lookup = {
         (
-            str(row.discipline or '').strip().casefold(),
-            str(row.subcategory or '').strip().casefold(),
+            str(_row_value(row, 'discipline', 0) or '').strip().casefold(),
+            str(_row_value(row, 'subcategory', 1) or '').strip().casefold(),
         ): {
-            'total_attempts': int(row.total_attempts or 0),
-            'total_correct': int(row.total_correct or 0),
+            'total_attempts': int(_row_value(row, 'total_attempts', 2) or 0),
+            'total_correct': int(_row_value(row, 'total_correct', 3) or 0),
         }
         for row in attempt_rows
-        if str(row.discipline or '').strip() and str(row.subcategory or '').strip()
+        if str(_row_value(row, 'discipline', 0) or '').strip()
+        and str(_row_value(row, 'subcategory', 1) or '').strip()
     }
 
     candidates: list[dict[str, object]] = []
     for row in question_rows:
-        normalized_discipline = str(row.discipline or '').strip()
-        normalized_subcategory = str(row.subcategory or '').strip()
+        normalized_discipline = str(_row_value(row, 'discipline', 0) or '').strip()
+        normalized_subcategory = str(_row_value(row, 'subcategory', 1) or '').strip()
         if not normalized_discipline or not normalized_subcategory:
             continue
 
@@ -92,13 +125,29 @@ def fetch_subcategory_candidates(
             {
                 'discipline': normalized_discipline,
                 'subcategory': normalized_subcategory,
-                'total_questions': int(row.total_questions or 0),
+                'total_questions': int(_row_value(row, 'total_questions', 2) or 0),
                 'total_attempts': total_attempts,
                 'accuracy_percent': accuracy_percent,
             }
         )
 
     return sorted(candidates, key=candidate_rank)
+
+
+def question_total_from_snapshot(
+    snapshot: CandidateSnapshot,
+    *,
+    discipline: str,
+    subcategory: str,
+) -> int:
+    total = 0
+    for row in snapshot.question_rows:
+        if _row_value(row, 'discipline', 0) != discipline:
+            continue
+        if _row_value(row, 'subcategory', 1) != subcategory:
+            continue
+        total += int(_row_value(row, 'total_questions', 2) or 0)
+    return total
 
 
 def candidate_rank(candidate: dict[str, object]) -> tuple[object, ...]:
@@ -147,3 +196,14 @@ def recommendation_key(item: dict[str, object]) -> tuple[str, str]:
         str(item.get('discipline') or '').strip().casefold(),
         str(item.get('subcategory') or '').strip().casefold(),
     )
+
+
+def _row_value(row: object, name: str, position: int) -> object:
+    mapping = getattr(row, '_mapping', None)
+    if mapping is not None:
+        return mapping.get(name)
+    if isinstance(row, dict):
+        return row.get(name)
+    if hasattr(row, name):
+        return getattr(row, name)
+    return row[position]
