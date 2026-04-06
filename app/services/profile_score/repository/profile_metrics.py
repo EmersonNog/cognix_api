@@ -22,7 +22,6 @@ from ..constants import (
 from .activity import (
     build_recent_activity_window,
     compute_current_streak_days,
-    count_active_days,
     fetch_activity_dates,
     latest_timestamp,
     recent_attempt_outcomes,
@@ -35,6 +34,87 @@ from .sessions import (
 )
 
 
+def _fetch_attempt_history_aggregates(
+    db: Session,
+    attempt_history,
+    *,
+    user_id: int,
+    active_days_cutoff,
+    recent_active_days_cutoff,
+) -> dict[str, object]:
+    row = (
+        db.execute(
+            select(
+                func.count().label('total_questions'),
+                func.count(func.distinct(attempt_history.c.question_id)).label(
+                    'unique_questions_answered'
+                ),
+                func.count()
+                .filter(attempt_history.c.is_correct.is_(True))
+                .label('total_correct'),
+                func.count(func.distinct(func.date(attempt_history.c.answered_at)))
+                .filter(attempt_history.c.answered_at >= active_days_cutoff)
+                .label('active_days_last_30'),
+                func.count(func.distinct(func.date(attempt_history.c.answered_at)))
+                .filter(attempt_history.c.answered_at >= recent_active_days_cutoff)
+                .label('recent_active_days'),
+                func.max(attempt_history.c.answered_at).label('last_attempt_at'),
+            )
+            .select_from(attempt_history)
+            .where(attempt_history.c.user_id == user_id)
+        )
+        .mappings()
+        .one()
+    )
+
+    return {
+        'total_questions': int(row.get('total_questions') or 0),
+        'unique_questions_answered': int(row.get('unique_questions_answered') or 0),
+        'total_correct': int(row.get('total_correct') or 0),
+        'active_days_last_30': int(row.get('active_days_last_30') or 0),
+        'recent_active_days': int(row.get('recent_active_days') or 0),
+        'last_attempt_at': row.get('last_attempt_at'),
+    }
+
+
+def _fetch_session_history_aggregates(
+    db: Session,
+    session_history,
+    *,
+    user_id: int,
+    recent_completed_sessions_cutoff,
+) -> dict[str, object]:
+    row = (
+        db.execute(
+            select(
+                func.count().label('completed_sessions'),
+                func.coalesce(func.sum(session_history.c.elapsed_seconds), 0).label(
+                    'total_study_seconds'
+                ),
+                func.count()
+                .filter(session_history.c.completed_at >= recent_completed_sessions_cutoff)
+                .label('recent_completed_sessions'),
+                func.max(session_history.c.completed_at).label(
+                    'history_last_completed_session_at'
+                ),
+            )
+            .select_from(session_history)
+            .where(session_history.c.user_id == user_id)
+        )
+        .mappings()
+        .one()
+    )
+
+    return {
+        'completed_sessions': int(row.get('completed_sessions') or 0),
+        'total_study_seconds': int(row.get('total_study_seconds') or 0),
+        'recent_completed_sessions': int(row.get('recent_completed_sessions') or 0),
+        'history_last_completed_session_at': row.get(
+            'history_last_completed_session_at'
+        ),
+    }
+
+
 def fetch_profile_metrics(db: Session, user_id: int) -> dict:
     now = utc_now()
     attempt_history = get_attempt_history_table(settings.attempt_history_table)
@@ -42,47 +122,26 @@ def fetch_profile_metrics(db: Session, user_id: int) -> dict:
     session_history = get_session_history_table(settings.session_history_table)
     sessions = get_sessions_table(settings.sessions_table)
 
-    total_questions = int(
-        db.execute(
-            select(func.count())
-            .select_from(attempt_history)
-            .where(attempt_history.c.user_id == user_id)
-        ).scalar()
-        or 0
+    consistency_cutoff = now - timedelta(days=CONSISTENCY_DAYS_WINDOW - 1)
+    recent_consistency_cutoff = now - timedelta(days=SCORE_CONSISTENCY_WINDOW_DAYS - 1)
+    attempt_aggregates = _fetch_attempt_history_aggregates(
+        db,
+        attempt_history,
+        user_id=user_id,
+        active_days_cutoff=consistency_cutoff,
+        recent_active_days_cutoff=recent_consistency_cutoff,
     )
-    unique_questions_answered = int(
-        db.execute(
-            select(func.count(func.distinct(attempt_history.c.question_id)))
-            .select_from(attempt_history)
-            .where(attempt_history.c.user_id == user_id)
-        ).scalar()
-        or 0
-    )
+    total_questions = int(attempt_aggregates['total_questions'])
+    unique_questions_answered = int(attempt_aggregates['unique_questions_answered'])
     question_bank_total = int(
         db.execute(select(func.count()).select_from(questions)).scalar()
         or 0
     )
-
-    total_correct = int(
-        db.execute(
-            select(func.count())
-            .select_from(attempt_history)
-            .where(attempt_history.c.user_id == user_id)
-            .where(attempt_history.c.is_correct.is_(True))
-        ).scalar()
-        or 0
-    )
+    total_correct = int(attempt_aggregates['total_correct'])
     accuracy_percent = (
         round((total_correct / total_questions) * 100, 1) if total_questions else 0.0
     )
-
-    consistency_cutoff = now - timedelta(days=CONSISTENCY_DAYS_WINDOW - 1)
-    active_days_last_30 = count_active_days(
-        db,
-        attempt_history,
-        user_id,
-        consistency_cutoff,
-    )
+    active_days_last_30 = int(attempt_aggregates['active_days_last_30'])
 
     question_rows = db.execute(
         select(
@@ -108,46 +167,21 @@ def fetch_profile_metrics(db: Session, user_id: int) -> dict:
         user_id,
         recent_accuracy_cutoff,
     )
-
-    recent_consistency_cutoff = now - timedelta(days=SCORE_CONSISTENCY_WINDOW_DAYS - 1)
-    recent_active_days = count_active_days(
-        db,
-        attempt_history,
-        user_id,
-        recent_consistency_cutoff,
-    )
+    recent_active_days = int(attempt_aggregates['recent_active_days'])
 
     recent_sessions_cutoff = now - timedelta(days=SCORE_SIMULATION_WINDOW_DAYS - 1)
-    completed_sessions = int(
-        db.execute(
-            select(func.count())
-            .select_from(session_history)
-            .where(session_history.c.user_id == user_id)
-        ).scalar()
-        or 0
+    session_aggregates = _fetch_session_history_aggregates(
+        db,
+        session_history,
+        user_id=user_id,
+        recent_completed_sessions_cutoff=recent_sessions_cutoff,
     )
-    total_study_seconds = int(
-        db.execute(
-            select(func.coalesce(func.sum(session_history.c.elapsed_seconds), 0))
-            .select_from(session_history)
-            .where(session_history.c.user_id == user_id)
-        ).scalar()
-        or 0
-    )
-    recent_completed_sessions = int(
-        db.execute(
-            select(func.count())
-            .select_from(session_history)
-            .where(session_history.c.user_id == user_id)
-            .where(session_history.c.completed_at >= recent_sessions_cutoff)
-        ).scalar()
-        or 0
-    )
-    history_last_completed_session_at = db.execute(
-        select(func.max(session_history.c.completed_at))
-        .select_from(session_history)
-        .where(session_history.c.user_id == user_id)
-    ).scalar()
+    completed_sessions = int(session_aggregates['completed_sessions'])
+    total_study_seconds = int(session_aggregates['total_study_seconds'])
+    recent_completed_sessions = int(session_aggregates['recent_completed_sessions'])
+    history_last_completed_session_at = session_aggregates[
+        'history_last_completed_session_at'
+    ]
 
     if completed_sessions == 0 and total_study_seconds == 0:
         fallback_metrics = fallback_completed_session_metrics(
@@ -167,11 +201,7 @@ def fetch_profile_metrics(db: Session, user_id: int) -> dict:
     )
 
     last_activity_at = latest_timestamp(
-        db.execute(
-            select(func.max(attempt_history.c.answered_at))
-            .select_from(attempt_history)
-            .where(attempt_history.c.user_id == user_id)
-        ).scalar(),
+        attempt_aggregates['last_attempt_at'],
         history_last_completed_session_at,
     )
     activity_dates = fetch_activity_dates(
