@@ -7,32 +7,11 @@ from sqlalchemy.orm import Session
 from app.core.datetime_utils import to_api_iso
 
 
-def require_user_context(
-    user_claims: dict,
-    require_firebase_uid: bool = False,
-) -> tuple[int, str | None]:
-    internal = user_claims.get('internal_user') or {}
-    user_id = internal.get('id')
-    firebase_uid = user_claims.get('uid')
-
-    if not user_id or (require_firebase_uid and not firebase_uid):
-        raise HTTPException(status_code=401, detail='Unauthorized')
-
-    return user_id, firebase_uid
-
-
 def parse_state_json(state_json: str | None) -> dict:
     try:
         return json.loads(state_json or '{}')
     except json.JSONDecodeError:
         return {}
-
-
-def normalize_required_text(field_name: str, value: object) -> str:
-    normalized = str(value or '').strip()
-    if not normalized:
-        raise HTTPException(status_code=400, detail=f'{field_name} is required')
-    return normalized
 
 
 def serialize_state(state: object) -> str:

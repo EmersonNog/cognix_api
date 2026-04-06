@@ -64,7 +64,7 @@ class HomeRecommendationsTests(unittest.TestCase):
         self.assertEqual(payload['items'][1]['reason_label'], 'Sem cobertura recente')
         self.assertEqual(
             payload['subtitle'],
-            'Priorizando pontos de atencao e frentes do seu plano',
+            'Priorizando pontos de atenção e frentes do seu plano',
         )
 
     @patch('app.services.recommendations.service._fetch_subcategory_candidates')

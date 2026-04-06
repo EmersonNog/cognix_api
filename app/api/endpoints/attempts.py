@@ -4,6 +4,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.api.endpoints.helpers import normalize_required_text, require_user_context
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
 from app.db.models import (
@@ -17,27 +18,16 @@ from app.services.economy import sync_attempt_reward
 router = APIRouter()
 
 
-def _require_authenticated_user(user_claims: dict) -> tuple[int, str]:
-    internal = user_claims.get('internal_user') or {}
-    user_id = internal.get('id')
-    firebase_uid = user_claims.get('uid')
-    if not user_id or not firebase_uid:
-        raise HTTPException(status_code=401, detail='Unauthorized')
-    return user_id, firebase_uid
-
-
 def _parse_attempt_payload(payload: dict) -> tuple[object, str, str | None, str | None]:
-    question_id = payload.get('question_id')
-    selected_letter = payload.get('selected_letter')
+    question_id = normalize_required_text('question_id', payload.get('question_id'))
+    selected_letter = normalize_required_text(
+        'selected_letter',
+        payload.get('selected_letter'),
+    )
     discipline = payload.get('discipline')
     subcategory = payload.get('subcategory')
 
-    if question_id is None or not str(question_id).strip():
-        raise HTTPException(status_code=400, detail='question_id is required')
-    if selected_letter is None or not str(selected_letter).strip():
-        raise HTTPException(status_code=400, detail='selected_letter is required')
-
-    normalized_letter = str(selected_letter).strip().upper()[:2]
+    normalized_letter = selected_letter.upper()[:2]
     return question_id, normalized_letter, discipline, subcategory
 
 
@@ -71,7 +61,10 @@ def upsert_attempt(
     db: Session = Depends(get_db),
     user_claims: dict = Depends(get_current_user),
 ) -> dict:
-    user_id, firebase_uid = _require_authenticated_user(user_claims)
+    user_id, firebase_uid = require_user_context(
+        user_claims,
+        require_firebase_uid=True,
+    )
     question_id, selected_letter, discipline, subcategory = _parse_attempt_payload(
         payload
     )

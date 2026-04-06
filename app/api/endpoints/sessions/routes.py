@@ -4,6 +4,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.api.endpoints.helpers import normalize_required_text, require_user_context
 from app.core.config import settings
 from app.core.datetime_utils import ensure_utc, to_api_iso, utc_now
 from app.db.models import get_session_history_table, get_sessions_table
@@ -14,8 +15,6 @@ from .helpers import (
     extract_completed_history_values,
     get_session_row,
     load_state,
-    normalize_required_text,
-    require_user_context,
     serialize_state,
 )
 
