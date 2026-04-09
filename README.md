@@ -75,6 +75,155 @@ Observações:
 - as tabelas internas são criadas no startup, mas a tabela `questions` precisa vir do backup da base
 - as pastas `backups/` e `secrets/` podem ir para o repositório vazias com `.gitkeep`, mas o conteúdo real não deve subir
 
+## ProduÃ§Ã£o na VPS
+
+Na VPS, o fluxo de produÃ§Ã£o usa estes arquivos:
+
+- `.env.production`
+- `docker-compose.prod.yml`
+- `Dockerfile.prod`
+- `deploy.sh`
+
+Comando base da stack em produÃ§Ã£o:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml ...
+```
+
+Esse formato Ã© importante porque o `docker compose` precisa ler a `.env.production` antes de montar os serviÃ§os.
+
+### Comandos individuais
+
+Subir ou recriar a stack inteira:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+```
+
+Use esse comando quando vocÃª mudar algo da infraestrutura, como:
+
+- `docker-compose.prod.yml`
+- `Dockerfile.prod`
+- serviÃ§o do banco
+- rede, volumes ou estrutura da stack
+
+Subir ou recriar somente a API:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build api
+```
+
+Esse Ã© o comando padrÃ£o do dia a dia. Use quando vocÃª mudar:
+
+- cÃ³digo Python em `app/`
+- rotas
+- serviÃ§os
+- regras de negÃ³cio
+- dependÃªncias da API
+
+Ver status dos containers:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml ps
+```
+
+Ver logs da API:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml logs -f api
+```
+
+Ver logs do banco:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml logs -f db
+```
+
+Reiniciar apenas a API:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml restart api
+```
+
+Parar a stack sem apagar dados:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml down
+```
+
+AtenÃ§Ã£o:
+
+- `down` para os containers, mas preserva os volumes
+- `down -v` remove volumes; em produÃ§Ã£o isso pode apagar dados
+
+### AtualizaÃ§Ã£o manual passo a passo
+
+Fluxo recomendado sempre que vocÃª publicar uma nova versÃ£o no GitHub:
+
+```bash
+cd /home/cloudpanel/apps/cognix_api
+git pull
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build api
+docker compose --env-file .env.production -f docker-compose.prod.yml ps
+curl https://api.cognix-hub.com/health
+```
+
+O que cada etapa faz:
+
+1. `git pull`: baixa a versÃ£o mais nova do repositÃ³rio.
+2. `up -d --build api`: rebuilda e recria sÃ³ a API.
+3. `ps`: mostra se os containers ficaram saudÃ¡veis.
+4. `curl`: valida se o endpoint `/health` continua respondendo.
+
+### `deploy.sh`
+
+O arquivo `deploy.sh` existe para vocÃª nÃ£o precisar decorar todos os comandos do deploy.
+
+Uso padrÃ£o:
+
+```bash
+bash deploy.sh
+```
+
+Esse comando faz cinco coisas:
+
+1. entra na pasta do projeto
+2. roda `git pull --ff-only`
+3. atualiza somente a API
+4. mostra o status dos containers
+5. testa `http://127.0.0.1:8000/health`
+
+Quando vocÃª quiser recriar a stack inteira:
+
+```bash
+bash deploy.sh full
+```
+
+DiferenÃ§a entre os modos:
+
+- `bash deploy.sh`: atualiza sÃ³ a API; esse Ã© o modo recomendado para o dia a dia
+- `bash deploy.sh full`: recria a stack inteira; use quando mexer em infraestrutura
+
+Primeiro uso na VPS:
+
+```bash
+cd /home/cloudpanel/apps/cognix_api
+chmod +x deploy.sh
+./deploy.sh
+```
+
+Se preferir, vocÃª tambÃ©m pode rodar assim:
+
+```bash
+bash deploy.sh
+```
+
+Regra simples para nunca se confundir:
+
+- mudou cÃ³digo da API: `bash deploy.sh`
+- mudou compose, Dockerfile ou algo da stack: `bash deploy.sh full`
+- quer investigar problema: veja `ps`, `logs -f api` e o endpoint `/health`
+
 ## Stack
 
 - Python 3.10+ no código
@@ -434,6 +583,137 @@ Para detalhes das rotas, payloads e respostas, use o Swagger da aplicação:
 
 - `http://localhost:8000/docs`
 - `http://localhost:8000/redoc`
+
+## Guia Rapido de Deploy na VPS
+
+Se voce estiver atualizando a API em producao, pense assim:
+
+1. faz a mudanca no seu computador
+2. sobe para o GitHub
+3. entra na VPS
+4. atualiza o repositorio
+5. recria a API
+6. testa o `/health`
+
+O comando base da producao e sempre este:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml ...
+```
+
+### Comandos individuais
+
+Atualizar so a API:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build api
+```
+
+Use esse comando no dia a dia, quando voce mudar:
+
+- codigo Python
+- rotas
+- servicos
+- regras de negocio
+- dependencias da API
+
+Atualizar a stack inteira:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+```
+
+Use esse comando quando voce mudar:
+
+- `docker-compose.prod.yml`
+- `Dockerfile.prod`
+- configuracao do banco
+- algo da infraestrutura da stack
+
+Ver status:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml ps
+```
+
+Ver logs da API:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml logs -f api
+```
+
+Ver logs do banco:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml logs -f db
+```
+
+Reiniciar so a API:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml restart api
+```
+
+Parar tudo sem apagar dados:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml down
+```
+
+Atencao:
+
+- `down` para os containers, mas mantem os volumes
+- `down -v` remove volumes; em producao isso pode apagar dados
+
+### Fluxo manual completo
+
+Quando voce publicar uma nova versao:
+
+```bash
+cd /home/cloudpanel/apps/cognix_api
+git pull
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build api
+docker compose --env-file .env.production -f docker-compose.prod.yml ps
+curl https://api.cognix-hub.com/health
+```
+
+### `deploy.sh`
+
+O arquivo `deploy.sh` existe para voce nao precisar decorar tudo.
+
+Uso normal:
+
+```bash
+bash deploy.sh
+```
+
+Esse comando:
+
+1. entra na pasta do projeto
+2. roda `git pull --ff-only`
+3. atualiza somente a API
+4. mostra o status dos containers
+5. testa `http://127.0.0.1:8000/health`
+
+Quando voce quiser recriar a stack inteira:
+
+```bash
+bash deploy.sh full
+```
+
+Primeiro uso na VPS:
+
+```bash
+cd /home/cloudpanel/apps/cognix_api
+chmod +x deploy.sh
+./deploy.sh
+```
+
+Regra simples para nunca se confundir:
+
+- mudou codigo da API: `bash deploy.sh`
+- mudou compose, Dockerfile ou algo da stack: `bash deploy.sh full`
+- quer investigar problema: veja `ps`, `logs -f api` e o endpoint `/health`
 
 ## Desenvolvimento
 
