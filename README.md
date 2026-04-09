@@ -693,12 +693,19 @@ Esse comando:
 2. roda `git pull --ff-only`
 3. atualiza somente a API
 4. mostra o status dos containers
-5. testa `http://127.0.0.1:8000/health`
+5. espera a API terminar de subir
+6. testa `http://127.0.0.1:8000/health`
 
 Quando voce quiser recriar a stack inteira:
 
 ```bash
 bash deploy.sh full
+```
+
+Se a API estiver demorando mais que o normal para subir, voce pode aumentar a espera:
+
+```bash
+HEALTHCHECK_RETRIES=30 HEALTHCHECK_INTERVAL_SECONDS=2 bash deploy.sh
 ```
 
 Primeiro uso na VPS:
@@ -713,6 +720,7 @@ Regra simples para nunca se confundir:
 
 - mudou codigo da API: `bash deploy.sh`
 - mudou compose, Dockerfile ou algo da stack: `bash deploy.sh full`
+- o script agora espera a API subir antes de validar o `/health`
 - quer investigar problema: veja `ps`, `logs -f api` e o endpoint `/health`
 
 ## Desenvolvimento

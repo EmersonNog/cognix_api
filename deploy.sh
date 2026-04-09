@@ -4,6 +4,8 @@ set -euo pipefail
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODE="${1:-api}"
 HEALTHCHECK_URL="${HEALTHCHECK_URL:-http://127.0.0.1:8000/health}"
+HEALTHCHECK_RETRIES="${HEALTHCHECK_RETRIES:-20}"
+HEALTHCHECK_INTERVAL_SECONDS="${HEALTHCHECK_INTERVAL_SECONDS:-2}"
 
 cd "$APP_DIR"
 
@@ -57,8 +59,28 @@ echo "==> Status dos containers"
 docker compose --env-file .env.production -f docker-compose.prod.yml ps
 
 echo
-echo "==> Testando healthcheck"
-curl --fail --silent --show-error "$HEALTHCHECK_URL"
+echo "==> Aguardando healthcheck"
+HEALTHCHECK_OK=0
+HEALTHCHECK_RESPONSE=""
+
+for ((attempt = 1; attempt <= HEALTHCHECK_RETRIES; attempt++)); do
+  if HEALTHCHECK_RESPONSE="$(curl --fail --silent --show-error "$HEALTHCHECK_URL" 2>/dev/null)"; then
+    HEALTHCHECK_OK=1
+    echo "Healthcheck respondeu com sucesso na tentativa $attempt/$HEALTHCHECK_RETRIES."
+    echo "$HEALTHCHECK_RESPONSE"
+    break
+  fi
+
+  echo "Tentativa $attempt/$HEALTHCHECK_RETRIES: API ainda inicializando. Aguardando ${HEALTHCHECK_INTERVAL_SECONDS}s..."
+  sleep "$HEALTHCHECK_INTERVAL_SECONDS"
+done
+
+if [[ "$HEALTHCHECK_OK" -ne 1 ]]; then
+  echo "Erro: a API nao respondeu ao healthcheck apos $HEALTHCHECK_RETRIES tentativas." >&2
+  echo "Verifique os logs com:" >&2
+  echo "docker compose --env-file .env.production -f docker-compose.prod.yml logs --tail=100 api" >&2
+  exit 1
+fi
 echo
 echo
 echo "Deploy concluido com sucesso."
