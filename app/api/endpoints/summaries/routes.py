@@ -1,4 +1,3 @@
-import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -187,7 +186,7 @@ def bootstrap_summaries(db: Session = Depends(get_db)) -> dict:
         insert_stmt = pg_insert(summaries).values(
             discipline=str(discipline).strip(),
             subcategory=str(subcategory).strip(),
-            payload_json=json.dumps(payload, ensure_ascii=True),
+            payload_json=payload,
             created_at=now,
             updated_at=now,
         )

@@ -209,7 +209,7 @@ def get_summaries_table(table_name: str) -> Table:
         metadata,
         _id_column(),
         *_discipline_columns(),
-        Column('payload_json', Text, nullable=False),
+        Column('payload_json', JSONB, nullable=False),
         *_timestamp_columns(),
         UniqueConstraint(
             'discipline',
@@ -227,7 +227,7 @@ def get_user_summaries_table(table_name: str) -> Table:
         _id_column(),
         *_user_columns(),
         *_discipline_columns(),
-        Column('payload_json', Text, nullable=False),
+        Column('payload_json', JSONB, nullable=False),
         *_timestamp_columns(),
         UniqueConstraint(
             'user_id',

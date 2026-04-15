@@ -57,10 +57,13 @@ def normalize_required_summary_fields(
     return str(discipline).strip(), str(subcategory).strip(), nodes, title
 
 
-def load_summary_payload(payload_json: str) -> dict:
+def load_summary_payload(payload_json: object) -> dict:
+    if isinstance(payload_json, dict):
+        return normalize_summary_payload(payload_json)
+
     try:
         return normalize_summary_payload(json.loads(payload_json))
-    except json.JSONDecodeError as exc:
+    except (TypeError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=500, detail='Invalid summary JSON') from exc
 
 

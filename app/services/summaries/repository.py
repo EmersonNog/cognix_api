@@ -1,5 +1,3 @@
-import json
-
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
@@ -40,7 +38,7 @@ def insert_base_summary_if_missing(
     insert_stmt = pg_insert(summaries).values(
         discipline=discipline,
         subcategory=subcategory,
-        payload_json=json.dumps(payload, ensure_ascii=True),
+        payload_json=payload,
         created_at=now,
         updated_at=now,
     )
@@ -60,18 +58,17 @@ def upsert_base_summary(
 ) -> None:
     summaries = get_summaries_table(settings.summaries_table)
     now = utc_now()
-    payload_json = json.dumps(payload, ensure_ascii=True)
     insert_stmt = pg_insert(summaries).values(
         discipline=discipline,
         subcategory=subcategory,
-        payload_json=payload_json,
+        payload_json=payload,
         created_at=now,
         updated_at=now,
     )
     db.execute(
         insert_stmt.on_conflict_do_update(
             index_elements=[summaries.c.discipline, summaries.c.subcategory],
-            set_={'payload_json': payload_json, 'updated_at': now},
+            set_={'payload_json': payload, 'updated_at': now},
         )
     )
     db.commit()
@@ -87,20 +84,19 @@ def upsert_user_summary(
 ) -> None:
     table = get_user_summaries_table(settings.user_summaries_table)
     now = utc_now()
-    payload_json = json.dumps(payload, ensure_ascii=True)
     insert_stmt = pg_insert(table).values(
         user_id=user_id,
         firebase_uid=firebase_uid,
         discipline=discipline,
         subcategory=subcategory,
-        payload_json=payload_json,
+        payload_json=payload,
         created_at=now,
         updated_at=now,
     )
     db.execute(
         insert_stmt.on_conflict_do_update(
             index_elements=[table.c.user_id, table.c.discipline, table.c.subcategory],
-            set_={'payload_json': payload_json, 'updated_at': now},
+            set_={'payload_json': payload, 'updated_at': now},
         )
     )
     db.commit()
