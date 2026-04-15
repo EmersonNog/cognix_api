@@ -165,7 +165,7 @@ cd /home/cloudpanel/apps/cognix_api
 git pull
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build api
 docker compose --env-file .env.production -f docker-compose.prod.yml ps
-curl https://api.cognix-hub.com/health
+curl https://sua-api.com/health
 ```
 
 O que cada etapa faz:
@@ -674,7 +674,7 @@ cd /home/cloudpanel/apps/cognix_api
 git pull
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build api
 docker compose --env-file .env.production -f docker-compose.prod.yml ps
-curl https://api.cognix-hub.com/health
+curl https://sua-api.com/health
 ```
 
 ### `deploy.sh`
