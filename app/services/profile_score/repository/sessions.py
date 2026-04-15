@@ -1,15 +1,7 @@
-import json
 from datetime import date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-
-def parse_state(state_json: str | None) -> dict:
-    try:
-        return json.loads(state_json or '{}')
-    except json.JSONDecodeError:
-        return {}
 
 
 def coerce_non_negative_int(value: object) -> int:
@@ -37,33 +29,31 @@ def fallback_completed_session_metrics(
     recent_cutoff,
 ) -> dict:
     rows = db.execute(
-        select(sessions.c.state_json, sessions.c.updated_at)
+        select(
+            sessions.c.elapsed_seconds,
+            sessions.c.saved_at,
+            sessions.c.updated_at,
+        )
         .where(sessions.c.user_id == user_id)
-        .order_by(sessions.c.updated_at.desc())
-    ).all()
+        .where(sessions.c.completed.is_(True))
+    ).mappings().all()
 
     completed_sessions = 0
     total_study_seconds = 0
     recent_completed_sessions = 0
     last_completed_at = None
 
-    for state_json, updated_at in rows:
-        payload = parse_state(state_json)
-        if payload.get('completed') is not True:
-            continue
-
+    for row in rows:
+        completed_at = row.get('saved_at') or row.get('updated_at')
         completed_sessions += 1
-        if updated_at is not None and (
-            last_completed_at is None or updated_at > last_completed_at
+        if completed_at is not None and (
+            last_completed_at is None or completed_at > last_completed_at
         ):
-            last_completed_at = updated_at
-        if updated_at is not None and updated_at >= recent_cutoff:
+            last_completed_at = completed_at
+        if completed_at is not None and completed_at >= recent_cutoff:
             recent_completed_sessions += 1
 
-        result = payload.get('result') if isinstance(payload.get('result'), dict) else {}
-        total_study_seconds += coerce_non_negative_int(
-            result.get('elapsedSeconds') or payload.get('elapsedSeconds')
-        )
+        total_study_seconds += coerce_non_negative_int(row.get('elapsed_seconds'))
 
     return {
         'completed_sessions': completed_sessions,
@@ -79,18 +69,17 @@ def fallback_completed_session_dates(
     user_id: int,
 ) -> list[date]:
     rows = db.execute(
-        select(sessions.c.state_json, sessions.c.updated_at)
+        select(
+            sessions.c.saved_at,
+            sessions.c.updated_at,
+        )
         .where(sessions.c.user_id == user_id)
-        .order_by(sessions.c.updated_at.desc())
-    ).all()
+        .where(sessions.c.completed.is_(True))
+    ).mappings().all()
 
     dates: set[date] = set()
-    for state_json, updated_at in rows:
-        payload = parse_state(state_json)
-        if payload.get('completed') is not True:
-            continue
-
-        coerced = _coerce_calendar_date(updated_at)
+    for row in rows:
+        coerced = _coerce_calendar_date(row.get('saved_at') or row.get('updated_at'))
         if coerced is not None:
             dates.add(coerced)
 
@@ -195,8 +184,6 @@ def recent_completed_session_key(item: dict[str, object]) -> tuple[str, str]:
         str(item.get('discipline') or '').strip().casefold(),
         str(item.get('subcategory') or '').strip().casefold(),
     )
-
-
 def _coerce_calendar_date(raw_value: object) -> date | None:
     if isinstance(raw_value, datetime):
         return raw_value.date()

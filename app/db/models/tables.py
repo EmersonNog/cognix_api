@@ -8,9 +8,13 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
+    func,
+    text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.core.datetime_utils import utc_now
+from app.services.session_state import LEGACY_SESSION_STATE_VERSION
 
 from .common import (
     _discipline_columns,
@@ -91,13 +95,53 @@ def get_attempt_history_table(table_name: str) -> Table:
 
 
 def get_sessions_table(table_name: str) -> Table:
-    return Table(
+    existing = metadata.tables.get(table_name)
+    if existing is not None:
+        return existing
+
+    table = Table(
         table_name,
         metadata,
         _id_column(),
         *_user_columns(),
         *_discipline_columns(),
-        Column('state_json', Text, nullable=False),
+        Column('state_json', JSONB, nullable=False),
+        Column(
+            'state_version',
+            Integer,
+            nullable=False,
+            default=LEGACY_SESSION_STATE_VERSION,
+            server_default=text(str(LEGACY_SESSION_STATE_VERSION)),
+        ),
+        Column(
+            'completed',
+            Boolean,
+            nullable=False,
+            default=False,
+            server_default=text('false'),
+        ),
+        Column(
+            'answered_questions',
+            Integer,
+            nullable=False,
+            default=0,
+            server_default=text('0'),
+        ),
+        Column(
+            'total_questions',
+            Integer,
+            nullable=False,
+            default=0,
+            server_default=text('0'),
+        ),
+        Column(
+            'elapsed_seconds',
+            Integer,
+            nullable=False,
+            default=0,
+            server_default=text('0'),
+        ),
+        Column('saved_at', DateTime(timezone=True), nullable=True),
         *_timestamp_columns(),
         UniqueConstraint(
             'user_id',
@@ -105,8 +149,19 @@ def get_sessions_table(table_name: str) -> Table:
             'subcategory',
             name=f'uq_{table_name}_user_session',
         ),
-        extend_existing=True,
     )
+    Index(
+        f'ix_{table_name}_user_effective_saved_at',
+        table.c.user_id,
+        func.coalesce(table.c.saved_at, table.c.updated_at),
+    )
+    Index(
+        f'ix_{table_name}_user_completed_effective_saved_at',
+        table.c.user_id,
+        table.c.completed,
+        func.coalesce(table.c.saved_at, table.c.updated_at),
+    )
+    return table
 
 
 def get_session_history_table(table_name: str) -> Table:

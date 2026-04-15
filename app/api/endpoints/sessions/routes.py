@@ -8,6 +8,11 @@ from app.api.endpoints.helpers import normalize_required_text, require_user_cont
 from app.core.config import settings
 from app.core.datetime_utils import ensure_utc, to_api_iso, utc_now
 from app.db.models import get_session_history_table, get_sessions_table
+from app.services.session_state import (
+    SessionStateValidationError,
+    derive_session_snapshot_columns,
+    normalize_session_state_for_storage,
+)
 
 from .helpers import (
     build_completed_history_overview_item,
@@ -15,7 +20,8 @@ from .helpers import (
     extract_completed_history_values,
     get_session_row,
     load_state,
-    serialize_state,
+    resolve_session_saved_at,
+    resolve_session_state_version,
 )
 
 router = APIRouter()
@@ -33,8 +39,11 @@ def upsert_session(
     )
     discipline = normalize_required_text('discipline', payload.get('discipline'))
     subcategory = normalize_required_text('subcategory', payload.get('subcategory'))
-    state_payload = payload.get('state')
-    state_json = serialize_state(state_payload)
+    try:
+        state_payload = normalize_session_state_for_storage(payload.get('state'))
+    except SessionStateValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    snapshot_columns = derive_session_snapshot_columns(state_payload)
 
     sessions = get_sessions_table(settings.sessions_table)
     session_history = get_session_history_table(settings.session_history_table)
@@ -44,7 +53,8 @@ def upsert_session(
         firebase_uid=firebase_uid,
         discipline=discipline,
         subcategory=subcategory,
-        state_json=state_json,
+        state_json=state_payload,
+        **snapshot_columns,
         created_at=now,
         updated_at=now,
     )
@@ -56,7 +66,8 @@ def upsert_session(
         ],
         set_={
             'firebase_uid': firebase_uid,
-            'state_json': state_json,
+            'state_json': state_payload,
+            **snapshot_columns,
             'updated_at': now,
         },
     )
@@ -103,6 +114,8 @@ def get_session(
 
     return {
         'state': load_state(row),
+        'saved_at': to_api_iso(resolve_session_saved_at(row)),
+        'state_version': resolve_session_state_version(row),
         'updated_at': to_api_iso(row.get('updated_at')),
     }
 
@@ -118,7 +131,10 @@ def get_sessions_overview(
     rows = db.execute(
         select(sessions)
         .where(sessions.c.user_id == user_id)
-        .order_by(sessions.c.updated_at.desc())
+        .order_by(
+            func.coalesce(sessions.c.saved_at, sessions.c.updated_at).desc(),
+            sessions.c.id.desc(),
+        )
     ).mappings().all()
 
     items = [build_session_overview_item(row) for row in rows]
@@ -146,7 +162,7 @@ def get_sessions_overview(
     )
 
     if latest_current_row is not None and latest_completed_row is not None:
-        latest_current_at = ensure_utc(latest_current_row.get('updated_at'))
+        latest_current_at = ensure_utc(resolve_session_saved_at(latest_current_row))
         latest_completed_at = ensure_utc(latest_completed_row.get('completed_at'))
         latest_session = (
             latest_current_item

@@ -20,21 +20,13 @@ def has_completed_session(
     subcategory: str,
 ) -> bool:
     sessions = get_sessions_table(settings.sessions_table)
-    row = db.execute(
-        select(sessions.c.state_json)
+    completed = db.execute(
+        select(sessions.c.completed)
         .where(sessions.c.user_id == user_id)
         .where(sessions.c.discipline == discipline)
         .where(sessions.c.subcategory == subcategory)
-    ).first()
-    if row is None or row[0] is None:
-        return False
-
-    try:
-        state = json.loads(row[0])
-    except json.JSONDecodeError:
-        return False
-
-    return state.get('completed') is True
+    ).scalar_one_or_none()
+    return completed is True
 
 
 def insert_base_summary_if_missing(
