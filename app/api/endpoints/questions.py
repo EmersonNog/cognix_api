@@ -4,12 +4,16 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import case, distinct, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.api.endpoints.helpers import require_user_context
 from app.core.config import settings
-from app.db.models import get_questions_table
+from app.core.datetime_utils import utc_now
+from app.db.models import get_question_reports_table, get_questions_table
 from app.db.session import engine
+from app.services.question_reports import parse_question_report_payload
 
 router = APIRouter()
 
@@ -71,6 +75,31 @@ def _parse_ids(ids: str) -> list[int]:
         return [int(item) for item in raw_ids]
     except ValueError:
         raise HTTPException(status_code=400, detail='ids must be integers')
+
+
+def _fetch_question_context(db: Session, question_id: int) -> dict[str, str | None]:
+    table = _get_questions_table()
+    id_column = _get_id_column(table)
+    columns = [id_column]
+    has_discipline = 'disciplina' in table.c
+    has_subcategory = 'subcategoria' in table.c
+    if has_discipline:
+        columns.append(table.c.disciplina)
+    if has_subcategory:
+        columns.append(table.c.subcategoria)
+
+    row = db.execute(select(*columns).where(id_column == question_id)).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail='Question not found')
+
+    context = {'discipline': None, 'subcategory': None}
+    offset = 1
+    if has_discipline:
+        context['discipline'] = row[offset]
+        offset += 1
+    if has_subcategory:
+        context['subcategory'] = row[offset]
+    return context
 
 
 @router.get('', dependencies=[Depends(get_current_user)])
@@ -159,6 +188,64 @@ def list_questions_by_ids(
     stmt = select(table).where(id_column.in_(id_list)).order_by(ordering)
     rows = db.execute(stmt).mappings().all()
     return {'items': _serialize_rows(rows)}
+
+
+@router.post('/{question_id}/report')
+def report_question(
+    question_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    user_claims: dict = Depends(get_current_user),
+) -> dict:
+    user_id, firebase_uid = require_user_context(
+        user_claims,
+        require_firebase_uid=True,
+    )
+    question_context = _fetch_question_context(db, question_id)
+    report_payload = parse_question_report_payload(payload)
+    reports = get_question_reports_table(settings.question_reports_table)
+    now = utc_now()
+    reason = str(report_payload['reason'])
+    details = report_payload['details']
+    discipline = report_payload['discipline'] or question_context['discipline']
+    subcategory = report_payload['subcategory'] or question_context['subcategory']
+
+    insert_stmt = pg_insert(reports).values(
+        user_id=user_id,
+        firebase_uid=firebase_uid,
+        question_id=question_id,
+        reason=reason,
+        details=details,
+        discipline=discipline,
+        subcategory=subcategory,
+        status='open',
+        created_at=now,
+        updated_at=now,
+    )
+    upsert_stmt = insert_stmt.on_conflict_do_update(
+        index_elements=[reports.c.user_id, reports.c.question_id],
+        set_={
+            'firebase_uid': firebase_uid,
+            'reason': reason,
+            'details': details,
+            'discipline': discipline,
+            'subcategory': subcategory,
+            'status': 'open',
+            'created_at': now,
+            'updated_at': now,
+        },
+    ).returning(reports.c.id)
+    result = db.execute(upsert_stmt)
+    report_id = int(result.scalar_one())
+    db.commit()
+
+    return {
+        'status': 'ok',
+        'report_id': report_id,
+        'question_id': question_id,
+        'reason': reason,
+        'reasons': report_payload['reasons'],
+    }
 
 
 @router.get('/{question_id}', dependencies=[Depends(get_current_user)])

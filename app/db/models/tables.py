@@ -94,6 +94,36 @@ def get_attempt_history_table(table_name: str) -> Table:
     )
 
 
+def get_question_reports_table(table_name: str) -> Table:
+    return Table(
+        table_name,
+        metadata,
+        _id_column(),
+        *_user_columns(),
+        Column('question_id', Integer, nullable=False, index=True),
+        Column('reason', String(80), nullable=False, index=True),
+        Column('details', Text, nullable=True),
+        *_discipline_columns(nullable=True),
+        Column(
+            'status',
+            String(40),
+            nullable=False,
+            default='open',
+            server_default=text("'open'"),
+        ),
+        *_timestamp_columns(),
+        Index(f'ix_{table_name}_question_created_at', 'question_id', 'created_at'),
+        Index(f'ix_{table_name}_user_created_at', 'user_id', 'created_at'),
+        Index(f'ix_{table_name}_status_created_at', 'status', 'created_at'),
+        UniqueConstraint(
+            'user_id',
+            'question_id',
+            name=f'uq_{table_name}_user_question',
+        ),
+        extend_existing=True,
+    )
+
+
 def get_sessions_table(table_name: str) -> Table:
     existing = metadata.tables.get(table_name)
     if existing is not None:

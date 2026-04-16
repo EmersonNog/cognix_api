@@ -7,6 +7,7 @@ from .common import metadata
 from .tables import (
     get_attempt_history_table,
     get_attempts_table,
+    get_question_reports_table,
     get_session_history_table,
     get_sessions_table,
     get_summaries_table,
@@ -260,14 +261,57 @@ def _ensure_summary_payload_schema(engine, table_name: str) -> None:
             )
 
 
+def _ensure_question_reports_schema(engine, table_name: str) -> None:
+    inspector = inspect(engine)
+    if table_name not in inspector.get_table_names():
+        return
+
+    quoted_table_name = _quote_identifier(engine, table_name)
+    unique_index_name = _quote_identifier(
+        engine,
+        f'uq_{table_name}_user_question',
+    )
+    columns = {
+        column['name']
+        for column in inspector.get_columns(table_name)
+    }
+    required_columns = {'id', 'user_id', 'question_id', 'created_at'}
+    if not required_columns.issubset(columns):
+        return
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                f'DELETE FROM {quoted_table_name} reports '
+                'USING ('
+                'SELECT id, ROW_NUMBER() OVER ('
+                'PARTITION BY user_id, question_id '
+                'ORDER BY created_at DESC, id DESC'
+                ') AS report_rank '
+                f'FROM {quoted_table_name}'
+                ') ranked '
+                'WHERE reports.id = ranked.id '
+                'AND ranked.report_rank > 1'
+            )
+        )
+        connection.execute(
+            text(
+                f'CREATE UNIQUE INDEX IF NOT EXISTS {unique_index_name} '
+                f'ON {quoted_table_name} (user_id, question_id)'
+            )
+        )
+
+
 def ensure_internal_schema(
     engine,
     users_table_name: str,
+    question_reports_table_name: str,
     sessions_table_name: str,
     summaries_table_name: str,
     user_summaries_table_name: str,
 ) -> None:
     _ensure_users_schema(engine, users_table_name)
+    _ensure_question_reports_schema(engine, question_reports_table_name)
     _ensure_sessions_schema(engine, sessions_table_name)
     _ensure_summary_payload_schema(engine, summaries_table_name)
     _ensure_summary_payload_schema(engine, user_summaries_table_name)
@@ -278,6 +322,7 @@ def create_internal_tables(
     users_table_name: str,
     attempts_table_name: str,
     attempt_history_table_name: str,
+    question_reports_table_name: str,
     sessions_table_name: str,
     session_history_table_name: str,
     summaries_table_name: str,
@@ -289,6 +334,7 @@ def create_internal_tables(
     get_users_table(users_table_name)
     get_attempts_table(attempts_table_name)
     get_attempt_history_table(attempt_history_table_name)
+    get_question_reports_table(question_reports_table_name)
     get_sessions_table(sessions_table_name)
     get_session_history_table(session_history_table_name)
     get_summaries_table(summaries_table_name)
@@ -302,6 +348,7 @@ def create_internal_tables(
             metadata.tables[users_table_name],
             metadata.tables[attempts_table_name],
             metadata.tables[attempt_history_table_name],
+            metadata.tables[question_reports_table_name],
             metadata.tables[sessions_table_name],
             metadata.tables[session_history_table_name],
             metadata.tables[summaries_table_name],
@@ -314,6 +361,7 @@ def create_internal_tables(
     ensure_internal_schema(
         engine,
         users_table_name,
+        question_reports_table_name,
         sessions_table_name,
         summaries_table_name,
         user_summaries_table_name,
