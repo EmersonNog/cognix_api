@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     database_url: str = 'postgresql+psycopg2://postgres:postgres@localhost:5432/cognix'
     question_table: str = 'questions'
     question_reports_table: str = 'question_reports'
+    multiplayer_rooms_table: str = 'multiplayer_rooms'
+    multiplayer_participants_table: str = 'multiplayer_room_participants'
     users_table: str = 'users'
     attempts_table: str = 'question_attempts'
     attempt_history_table: str = 'question_attempt_history'

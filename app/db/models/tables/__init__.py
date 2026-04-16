@@ -4,6 +4,10 @@ from .questions import (
     get_question_reports_table,
     get_questions_table,
 )
+from .multiplayer import (
+    get_multiplayer_participants_table,
+    get_multiplayer_rooms_table,
+)
 from .summaries import get_summaries_table, get_user_summaries_table
 from .training import get_session_history_table, get_sessions_table
 from .users import (
@@ -16,6 +20,8 @@ from .users import (
 __all__ = [
     'get_attempt_history_table',
     'get_attempts_table',
+    'get_multiplayer_participants_table',
+    'get_multiplayer_rooms_table',
     'get_question_reports_table',
     'get_questions_table',
     'get_session_history_table',

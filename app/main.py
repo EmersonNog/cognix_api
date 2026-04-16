@@ -32,6 +32,8 @@ def _create_internal_tables() -> None:
         settings.attempts_table,
         settings.attempt_history_table,
         settings.question_reports_table,
+        settings.multiplayer_rooms_table,
+        settings.multiplayer_participants_table,
         settings.sessions_table,
         settings.session_history_table,
         settings.summaries_table,
