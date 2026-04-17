@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from app.services.multiplayer.payloads import (
     normalize_display_name,
     normalize_pin,
+    parse_answer_payload,
     parse_create_room_payload,
     parse_join_room_payload,
     parse_max_participants,
@@ -49,6 +50,24 @@ class MultiplayerPayloadTests(unittest.TestCase):
 
         self.assertEqual(payload['pin'], '654321')
         self.assertEqual(payload['display_name'], 'Jogador')
+
+    def test_parse_answer_payload_normalizes_values(self) -> None:
+        payload = parse_answer_payload(
+            {'question_id': '42', 'selected_letter': ' b '}
+        )
+
+        self.assertEqual(payload['question_id'], 42)
+        self.assertEqual(payload['selected_letter'], 'B')
+
+    def test_parse_answer_payload_rejects_invalid_values(self) -> None:
+        for payload in (
+            {'question_id': 'x', 'selected_letter': 'A'},
+            {'question_id': 0, 'selected_letter': 'A'},
+            {'question_id': 42, 'selected_letter': ''},
+        ):
+            with self.subTest(payload=payload):
+                with self.assertRaises(HTTPException):
+                    parse_answer_payload(payload)
 
     def test_multiplayer_endpoint_module_imports_routes(self) -> None:
         from app.api.endpoints import multiplayer

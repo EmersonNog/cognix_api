@@ -60,6 +60,8 @@ def create_internal_tables(
         engine,
         users_table_name,
         question_reports_table_name,
+        multiplayer_rooms_table_name,
+        multiplayer_participants_table_name,
         sessions_table_name,
         summaries_table_name,
         user_summaries_table_name,

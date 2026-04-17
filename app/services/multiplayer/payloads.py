@@ -59,3 +59,24 @@ def parse_join_room_payload(payload: object) -> dict[str, object]:
         'pin': normalize_pin(payload.get('pin')),
         'display_name': normalize_display_name(payload.get('display_name')),
     }
+
+
+def parse_answer_payload(payload: object) -> dict[str, object]:
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail='Invalid answer payload')
+
+    question_id = payload.get('question_id')
+    selected_letter = str(payload.get('selected_letter') or '').strip().upper()[:2]
+    try:
+        normalized_question_id = int(str(question_id).strip())
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail='question_id must be numeric') from exc
+    if normalized_question_id <= 0:
+        raise HTTPException(status_code=400, detail='question_id must be positive')
+    if not selected_letter:
+        raise HTTPException(status_code=400, detail='selected_letter is required')
+
+    return {
+        'question_id': normalized_question_id,
+        'selected_letter': selected_letter,
+    }

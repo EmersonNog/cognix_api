@@ -10,10 +10,12 @@ from app.services.multiplayer import (
     join_room,
     leave_room,
     normalize_pin,
+    parse_answer_payload,
     parse_create_room_payload,
     parse_join_room_payload,
     remove_participant,
     start_room,
+    submit_answer,
 )
 
 router = APIRouter()
@@ -131,3 +133,21 @@ def start_multiplayer_room(
 ) -> dict:
     user_id, _firebase_uid = require_user_context(user_claims)
     return start_room(db, room_id=room_id, host_user_id=user_id)
+
+
+@router.post('/rooms/{room_id}/answers')
+def submit_multiplayer_answer(
+    room_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    user_claims: dict = Depends(get_current_user),
+) -> dict:
+    user_id, _firebase_uid = require_user_context(user_claims)
+    parsed_payload = parse_answer_payload(payload)
+    return submit_answer(
+        db,
+        room_id=room_id,
+        user_id=user_id,
+        question_id=int(parsed_payload['question_id']),
+        selected_letter=str(parsed_payload['selected_letter']),
+    )
