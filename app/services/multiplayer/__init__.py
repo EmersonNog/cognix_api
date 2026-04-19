@@ -1,10 +1,24 @@
+from .events import (
+    EVENT_ANSWER_SUBMITTED,
+    EVENT_MATCH_FINISHED,
+    EVENT_MATCH_STARTED,
+    EVENT_ROOM_CLOSED,
+    EVENT_ROOM_JOINED,
+    EVENT_ROOM_LEFT,
+    EVENT_ROOM_SYNCED,
+    EVENT_ROUND_STARTED,
+    MULTIPLAYER_EVENT_TYPES,
+    build_room_event,
+)
 from .payloads import (
     normalize_pin,
     parse_answer_payload,
     parse_create_room_payload,
     parse_join_room_payload,
 )
+from .realtime import multiplayer_connection_manager
 from .repository import (
+    close_room_for_host_disconnect,
     create_room,
     get_room_by_id,
     get_room_by_pin,
@@ -16,12 +30,24 @@ from .repository import (
 )
 
 __all__ = [
+    'build_room_event',
+    'close_room_for_host_disconnect',
     'create_room',
+    'EVENT_ANSWER_SUBMITTED',
+    'EVENT_MATCH_FINISHED',
+    'EVENT_MATCH_STARTED',
+    'EVENT_ROOM_CLOSED',
+    'EVENT_ROOM_JOINED',
+    'EVENT_ROOM_LEFT',
+    'EVENT_ROOM_SYNCED',
+    'EVENT_ROUND_STARTED',
     'get_room_by_id',
     'get_room_by_pin',
     'join_room',
     'leave_room',
     'normalize_pin',
+    'MULTIPLAYER_EVENT_TYPES',
+    'multiplayer_connection_manager',
     'parse_answer_payload',
     'parse_create_room_payload',
     'parse_join_room_payload',

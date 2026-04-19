@@ -1,8 +1,8 @@
 from fastapi import HTTPException
 
-DEFAULT_MAX_PARTICIPANTS = 8
+DEFAULT_MAX_PARTICIPANTS = 10
 MIN_PARTICIPANTS = 2
-MAX_PARTICIPANTS = 8
+MAX_PARTICIPANTS = 10
 
 
 def normalize_pin(value: object) -> str:

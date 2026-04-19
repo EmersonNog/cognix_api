@@ -22,11 +22,11 @@ class MultiplayerPayloadTests(unittest.TestCase):
                 with self.assertRaises(HTTPException):
                     normalize_pin(value)
 
-    def test_parse_max_participants_defaults_to_eight(self) -> None:
-        self.assertEqual(parse_max_participants(None), 8)
+    def test_parse_max_participants_defaults_to_ten(self) -> None:
+        self.assertEqual(parse_max_participants(None), 10)
 
     def test_parse_max_participants_rejects_out_of_range_values(self) -> None:
-        for value in (1, 9):
+        for value in (1, 11):
             with self.subTest(value=value):
                 with self.assertRaises(HTTPException):
                     parse_max_participants(value)

@@ -36,8 +36,8 @@ def get_multiplayer_rooms_table(table_name: str) -> Table:
             'max_participants',
             Integer,
             nullable=False,
-            default=8,
-            server_default=text('8'),
+            default=10,
+            server_default=text('10'),
         ),
         Column('question_ids', JSON, nullable=True),
         Column(
