@@ -22,11 +22,12 @@ class Settings(BaseSettings):
     user_coin_ledger_table: str = 'user_coin_ledger'
     user_avatar_inventory_table: str = 'user_avatar_inventory'
     study_plan_table: str = 'user_study_plans'
+    writing_themes_table: str = 'writing_themes'
     allowed_origins: list[str] = ['*']
     firebase_credentials: str | None = None
     firebase_clock_skew_seconds: int = 5
     gemini_api_key: str | None = None
-    gemini_model: str = 'gemini-3-flash-preview'
+    gemini_model: str = 'gemini-2.5-flash-lite'
     app_timezone: str = 'America/Sao_Paulo'
 
 settings = Settings()

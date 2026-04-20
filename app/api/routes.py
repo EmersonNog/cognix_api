@@ -7,6 +7,7 @@ from app.api.endpoints.sessions import router as sessions_router
 from app.api.endpoints.study_plan import router as study_plan_router
 from app.api.endpoints.summaries import router as summaries_router
 from app.api.endpoints.users import router as users_router
+from app.api.endpoints.writing import router as writing_router
 
 def create_api_router() -> APIRouter:
     router = APIRouter()
@@ -21,6 +22,7 @@ def create_api_router() -> APIRouter:
     router.include_router(sessions_router, prefix='/sessions', tags=['sessions'])
     router.include_router(study_plan_router, prefix='/study-plan', tags=['study-plan'])
     router.include_router(summaries_router, prefix='/summaries', tags=['summaries'])
+    router.include_router(writing_router, prefix='/writing', tags=['writing'])
     return router
 
 api_router = create_api_router()

@@ -15,6 +15,7 @@ from .tables import (
     get_user_study_plan_table,
     get_user_summaries_table,
     get_users_table,
+    get_writing_themes_table,
 )
 
 __all__ = [
@@ -34,5 +35,6 @@ __all__ = [
     'get_user_study_plan_table',
     'get_user_summaries_table',
     'get_users_table',
+    'get_writing_themes_table',
     'metadata',
 ]

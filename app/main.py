@@ -41,8 +41,8 @@ def _create_internal_tables() -> None:
         settings.user_coin_ledger_table,
         settings.user_avatar_inventory_table,
         settings.study_plan_table,
+        settings.writing_themes_table,
     )
-
 
 def create_app() -> FastAPI:
     app = FastAPI(title='Cognix API', version='0.1.0')
