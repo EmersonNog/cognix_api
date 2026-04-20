@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     user_avatar_inventory_table: str = 'user_avatar_inventory'
     study_plan_table: str = 'user_study_plans'
     writing_themes_table: str = 'writing_themes'
+    writing_submissions_table: str = 'writing_submissions'
+    writing_submission_versions_table: str = 'writing_submission_versions'
     allowed_origins: list[str] = ['*']
     firebase_credentials: str | None = None
     firebase_clock_skew_seconds: int = 5

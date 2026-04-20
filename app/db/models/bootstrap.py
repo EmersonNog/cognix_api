@@ -14,6 +14,8 @@ from .tables import (
     get_user_study_plan_table,
     get_user_summaries_table,
     get_users_table,
+    get_writing_submission_versions_table,
+    get_writing_submissions_table,
     get_writing_themes_table,
 )
 
@@ -34,6 +36,8 @@ def create_internal_tables(
     user_avatar_inventory_table_name: str,
     study_plan_table_name: str,
     writing_themes_table_name: str,
+    writing_submissions_table_name: str,
+    writing_submission_versions_table_name: str,
 ) -> None:
     table_specs = [
         (users_table_name, get_users_table),
@@ -50,6 +54,11 @@ def create_internal_tables(
         (user_avatar_inventory_table_name, get_user_avatar_inventory_table),
         (study_plan_table_name, get_user_study_plan_table),
         (writing_themes_table_name, get_writing_themes_table),
+        (writing_submissions_table_name, get_writing_submissions_table),
+        (
+            writing_submission_versions_table_name,
+            get_writing_submission_versions_table,
+        ),
     ]
 
     for table_name, register_table in table_specs:

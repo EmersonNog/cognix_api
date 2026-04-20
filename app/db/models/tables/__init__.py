@@ -16,7 +16,11 @@ from .users import (
     get_user_study_plan_table,
     get_users_table,
 )
-from .writing import get_writing_themes_table
+from .writing import (
+    get_writing_submission_versions_table,
+    get_writing_submissions_table,
+    get_writing_themes_table,
+)
 
 __all__ = [
     'get_attempt_history_table',
@@ -33,5 +37,7 @@ __all__ = [
     'get_user_study_plan_table',
     'get_user_summaries_table',
     'get_users_table',
+    'get_writing_submission_versions_table',
+    'get_writing_submissions_table',
     'get_writing_themes_table',
 ]

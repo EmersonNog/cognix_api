@@ -42,6 +42,8 @@ def _create_internal_tables() -> None:
         settings.user_avatar_inventory_table,
         settings.study_plan_table,
         settings.writing_themes_table,
+        settings.writing_submissions_table,
+        settings.writing_submission_versions_table,
     )
 
 def create_app() -> FastAPI:
