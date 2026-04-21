@@ -20,6 +20,21 @@ def ensure_users_schema(engine, users_table_name: str) -> None:
             f'ALTER TABLE {users_table_name} '
             'ADD COLUMN IF NOT EXISTS equipped_avatar_seed VARCHAR(255)'
         )
+    if 'profile_ai_insight_json' not in column_names:
+        statements.append(
+            f'ALTER TABLE {users_table_name} '
+            'ADD COLUMN IF NOT EXISTS profile_ai_insight_json TEXT'
+        )
+    if 'profile_ai_insight_fingerprint' not in column_names:
+        statements.append(
+            f'ALTER TABLE {users_table_name} '
+            'ADD COLUMN IF NOT EXISTS profile_ai_insight_fingerprint VARCHAR(64)'
+        )
+    if 'profile_ai_insight_generated_at' not in column_names:
+        statements.append(
+            f'ALTER TABLE {users_table_name} '
+            'ADD COLUMN IF NOT EXISTS profile_ai_insight_generated_at TEXT'
+        )
 
     if not statements:
         return

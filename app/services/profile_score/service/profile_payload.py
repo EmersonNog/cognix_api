@@ -7,6 +7,7 @@ from ..constants import (
 )
 from ..repository import fetch_profile_metrics
 from ..scoring import calculate_score_components
+from .ai_insight import build_profile_ai_insight
 from .serializers import serialize_questions_by_discipline
 
 
@@ -32,6 +33,12 @@ def fetch_profile_score(db: Session, user_id: int) -> dict:
         inactivity_days=inactivity_days,
     )
     next_level, points_to_next_level = score_data['next_level']
+    ai_insight = build_profile_ai_insight(
+        db,
+        user_id=user_id,
+        metrics=metrics,
+        score_data=score_data,
+    )
 
     return {
         'score': score_data['score'],
@@ -71,4 +78,5 @@ def fetch_profile_score(db: Session, user_id: int) -> dict:
         'attention_accuracy_threshold': SUBCATEGORY_ATTENTION_ACCURACY_THRESHOLD,
         'score_breakdown': score_data['score_breakdown'],
         'recent_index_breakdown': score_data['recent_index_breakdown'],
+        'ai_insight': ai_insight,
     }

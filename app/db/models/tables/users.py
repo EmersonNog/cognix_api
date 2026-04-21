@@ -14,6 +14,9 @@ def get_users_table(table_name: str) -> Table:
         Column('provider', String(100), nullable=True),
         Column('coins_half_units', Integer, nullable=False, default=0),
         Column('equipped_avatar_seed', String(255), nullable=True),
+        Column('profile_ai_insight_json', Text, nullable=True),
+        Column('profile_ai_insight_fingerprint', String(64), nullable=True),
+        Column('profile_ai_insight_generated_at', Text, nullable=True),
         *_timestamp_columns(),
         extend_existing=True,
     )
