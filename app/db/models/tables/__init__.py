@@ -10,6 +10,7 @@ from .multiplayer import (
 )
 from .summaries import get_summaries_table, get_user_summaries_table
 from .training import get_session_history_table, get_sessions_table
+from .flashcards import get_flashcard_deck_states_table, get_flashcards_table
 from .users import (
     get_user_avatar_inventory_table,
     get_user_coin_ledger_table,
@@ -25,6 +26,8 @@ from .writing import (
 __all__ = [
     'get_attempt_history_table',
     'get_attempts_table',
+    'get_flashcard_deck_states_table',
+    'get_flashcards_table',
     'get_multiplayer_participants_table',
     'get_multiplayer_rooms_table',
     'get_question_reports_table',

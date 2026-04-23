@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     user_coin_ledger_table: str = 'user_coin_ledger'
     user_avatar_inventory_table: str = 'user_avatar_inventory'
     study_plan_table: str = 'user_study_plans'
+    flashcards_table: str = 'user_flashcards'
+    flashcard_deck_states_table: str = 'user_flashcard_deck_states'
     writing_themes_table: str = 'writing_themes'
     writing_submissions_table: str = 'writing_submissions'
     writing_submission_versions_table: str = 'writing_submission_versions'

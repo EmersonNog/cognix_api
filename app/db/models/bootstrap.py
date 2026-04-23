@@ -3,6 +3,8 @@ from .schema import ensure_internal_schema
 from .tables import (
     get_attempt_history_table,
     get_attempts_table,
+    get_flashcard_deck_states_table,
+    get_flashcards_table,
     get_multiplayer_participants_table,
     get_multiplayer_rooms_table,
     get_question_reports_table,
@@ -35,6 +37,8 @@ def create_internal_tables(
     user_coin_ledger_table_name: str,
     user_avatar_inventory_table_name: str,
     study_plan_table_name: str,
+    flashcards_table_name: str,
+    flashcard_deck_states_table_name: str,
     writing_themes_table_name: str,
     writing_submissions_table_name: str,
     writing_submission_versions_table_name: str,
@@ -53,6 +57,8 @@ def create_internal_tables(
         (user_coin_ledger_table_name, get_user_coin_ledger_table),
         (user_avatar_inventory_table_name, get_user_avatar_inventory_table),
         (study_plan_table_name, get_user_study_plan_table),
+        (flashcards_table_name, get_flashcards_table),
+        (flashcard_deck_states_table_name, get_flashcard_deck_states_table),
         (writing_themes_table_name, get_writing_themes_table),
         (writing_submissions_table_name, get_writing_submissions_table),
         (

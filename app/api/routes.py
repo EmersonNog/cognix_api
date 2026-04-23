@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.endpoints.attempts import router as attempts_router
+from app.api.endpoints.flashcards import router as flashcards_router
 from app.api.endpoints.multiplayer import router as multiplayer_router
 from app.api.endpoints.questions import router as questions_router
 from app.api.endpoints.sessions import router as sessions_router
@@ -12,6 +13,7 @@ from app.api.endpoints.writing import router as writing_router
 def create_api_router() -> APIRouter:
     router = APIRouter()
     router.include_router(users_router, prefix='/users', tags=['users'])
+    router.include_router(flashcards_router, prefix='/flashcards', tags=['flashcards'])
     router.include_router(attempts_router, prefix='/attempts', tags=['attempts'])
     router.include_router(
         multiplayer_router,

@@ -41,6 +41,8 @@ def _create_internal_tables() -> None:
         settings.user_coin_ledger_table,
         settings.user_avatar_inventory_table,
         settings.study_plan_table,
+        settings.flashcards_table,
+        settings.flashcard_deck_states_table,
         settings.writing_themes_table,
         settings.writing_submissions_table,
         settings.writing_submission_versions_table,
