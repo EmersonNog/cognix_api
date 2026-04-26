@@ -13,7 +13,6 @@ class CreateAbacatePaySubscriptionPayload(BaseModel):
     name: str
     email: str
     taxId: str
-    couponCode: str | None = None
 
 
 @router.post('/abacatepay/subscription')
@@ -27,7 +26,7 @@ def create_abacatepay_subscription(
         name=payload.name,
         email=payload.email,
         tax_id=payload.taxId,
-        coupon_code=payload.couponCode,
+        coupon_code=None,
     )
 
     return {'checkoutUrl': checkout_url}
