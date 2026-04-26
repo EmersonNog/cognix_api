@@ -7,8 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.core.config import settings
-from app.services.payments import (
+from app.services.payments.abacatepay.checkout.subscriptions import (
     create_subscription_checkout,
+)
+from app.services.payments.abacatepay.webhooks.handlers import (
     handle_abacatepay_webhook,
 )
 
@@ -37,7 +39,6 @@ def create_abacatepay_subscription(
 
     return {'checkoutUrl': checkout_url}
 
-
 @router.post('/abacatepay/webhook')
 async def receive_abacatepay_webhook(
     request: Request,
@@ -51,10 +52,10 @@ async def receive_abacatepay_webhook(
     try:
         payload = json.loads(raw_body.decode('utf-8'))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise HTTPException(status_code=400, detail='Payload de webhook invalido.') from exc
+        raise HTTPException(status_code=400, detail='Payload de webhook inválido.') from exc
 
     if not isinstance(payload, dict):
-        raise HTTPException(status_code=400, detail='Payload de webhook invalido.')
+        raise HTTPException(status_code=400, detail='Payload de webhook inválido.')
 
     return handle_abacatepay_webhook(db, payload)
 
@@ -63,4 +64,4 @@ def _validate_webhook_secret(received_secret: str | None) -> None:
     expected_secret = settings.abacatepay_webhook_secret
 
     if expected_secret and not hmac.compare_digest(received_secret or '', expected_secret):
-        raise HTTPException(status_code=401, detail='Webhook nao autorizado.')
+        raise HTTPException(status_code=401, detail='Webhook não autorizado.')

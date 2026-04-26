@@ -29,7 +29,6 @@ from .tables import (
 
 _POSTGRES_BOOTSTRAP_LOCK_ID = 746113361402687281
 
-
 @contextmanager
 def _schema_bootstrap_lock(engine) -> Iterator[None]:
     if engine.dialect.name != 'postgresql':
@@ -48,7 +47,6 @@ def _schema_bootstrap_lock(engine) -> Iterator[None]:
                 text('SELECT pg_advisory_unlock(:lock_id)'),
                 {'lock_id': _POSTGRES_BOOTSTRAP_LOCK_ID},
             )
-
 
 def create_internal_tables(
     engine,

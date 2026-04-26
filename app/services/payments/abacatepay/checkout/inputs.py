@@ -5,8 +5,7 @@ from dataclasses import dataclass
 
 from fastapi import HTTPException
 
-from .plans import VALID_PLAN_IDS
-
+from ..shared.plans import VALID_PLAN_IDS
 
 @dataclass(frozen=True)
 class CheckoutInput:
@@ -16,10 +15,8 @@ class CheckoutInput:
     tax_id: str
     coupon_code: str
 
-
 def normalize_coupon(value: str | None) -> str:
     return re.sub(r'[^A-Z0-9_-]', '', (value or '').upper())[:30]
-
 
 def normalize_checkout_input(
     *,
@@ -40,16 +37,16 @@ def normalize_checkout_input(
 
 def validate_checkout_input(checkout: CheckoutInput) -> None:
     if checkout.plan_id not in VALID_PLAN_IDS:
-        raise HTTPException(status_code=400, detail='Plano invalido.')
+        raise HTTPException(status_code=400, detail='Plano inválido.')
 
     if len(checkout.name) < 2 or len(checkout.name) > 120:
-        raise HTTPException(status_code=400, detail='Informe um nome valido.')
+        raise HTTPException(status_code=400, detail='Informe um nome válido.')
 
     if '@' not in checkout.email or len(checkout.email) > 320:
-        raise HTTPException(status_code=400, detail='Informe um email valido.')
+        raise HTTPException(status_code=400, detail='Informe um email válido.')
 
     if not _is_valid_cpf(checkout.tax_id):
-        raise HTTPException(status_code=400, detail='Informe um CPF valido.')
+        raise HTTPException(status_code=400, detail='Informe um CPF válido.')
 
 
 def _is_valid_cpf(cpf: str) -> bool:

@@ -4,11 +4,13 @@ from unittest.mock import Mock, patch
 from fastapi import HTTPException
 
 from app.core.config import settings
-from app.services.payments.abacatepay.checkout import CheckoutInput
-from app.services.payments.abacatepay.client import _subscription_payload
-from app.services.payments.abacatepay.plans import PlanConfig
-from app.services.payments.abacatepay.service import (
+from app.services.payments.abacatepay.checkout.inputs import CheckoutInput
+from app.services.payments.abacatepay.checkout.subscriptions import (
     create_subscription_checkout,
+)
+from app.services.payments.abacatepay.gateway.payloads import subscription_payload
+from app.services.payments.abacatepay.shared.plans import PlanConfig
+from app.services.payments.abacatepay.webhooks.handlers import (
     handle_abacatepay_webhook,
 )
 
@@ -23,11 +25,11 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
             patch.object(settings, 'abacatepay_coupon_mensal_first_month', 'COGNIX10'),
             patch.object(settings, 'abacatepay_hash_secret', 'test-secret'),
             patch(
-                'app.services.payments.abacatepay.service.create_customer',
+                'app.services.payments.abacatepay.checkout.subscriptions.create_customer',
                 return_value='cust_123',
             ),
             patch(
-                'app.services.payments.abacatepay.service.create_subscription',
+                'app.services.payments.abacatepay.checkout.subscriptions.create_subscription',
                 return_value=('https://app.abacatepay.com/pay/bill_123', 'bill_123'),
             ) as create_subscription_mock,
         ):
@@ -58,11 +60,11 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
             patch.object(settings, 'abacatepay_coupon_mensal_first_month', 'COGNIX10'),
             patch.object(settings, 'abacatepay_hash_secret', 'test-secret'),
             patch(
-                'app.services.payments.abacatepay.service.create_customer',
+                'app.services.payments.abacatepay.checkout.subscriptions.create_customer',
                 return_value='cust_123',
             ),
             patch(
-                'app.services.payments.abacatepay.service.create_subscription',
+                'app.services.payments.abacatepay.checkout.subscriptions.create_subscription',
                 return_value=('https://app.abacatepay.com/pay/bill_123', 'bill_123'),
             ) as create_subscription_mock,
         ):
@@ -98,10 +100,10 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
             patch.object(settings, 'abacatepay_coupon_mensal_first_month', 'COGNIX10'),
             patch.object(settings, 'abacatepay_hash_secret', 'test-secret'),
             patch(
-                'app.services.payments.abacatepay.service.create_customer',
+                'app.services.payments.abacatepay.checkout.subscriptions.create_customer',
             ) as create_customer_mock,
             patch(
-                'app.services.payments.abacatepay.service.create_subscription',
+                'app.services.payments.abacatepay.checkout.subscriptions.create_subscription',
             ) as create_subscription_mock,
         ):
             with self.assertRaises(HTTPException) as exc_info:
@@ -131,11 +133,11 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
             patch.object(settings, 'abacatepay_coupon_mensal_first_month', 'COGNIX10'),
             patch.object(settings, 'abacatepay_hash_secret', 'test-secret'),
             patch(
-                'app.services.payments.abacatepay.service.create_customer',
+                'app.services.payments.abacatepay.checkout.subscriptions.create_customer',
                 return_value='cust_123',
             ),
             patch(
-                'app.services.payments.abacatepay.service.create_subscription',
+                'app.services.payments.abacatepay.checkout.subscriptions.create_subscription',
                 return_value=('https://app.abacatepay.com/pay/bill_123', 'bill_123'),
             ) as create_subscription_mock,
         ):
@@ -165,7 +167,7 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
             coupon_code='',
         )
 
-        payload = _subscription_payload(
+        payload = subscription_payload(
             checkout=checkout,
             plan=PlanConfig(product_id='prod_mensal', coupon_code='COGNIX10'),
             customer_id='cust_123',
@@ -188,10 +190,10 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
             patch.object(settings, 'abacatepay_coupon_mensal_first_month', 'COGNIX10'),
             patch.object(settings, 'abacatepay_hash_secret', 'test-secret'),
             patch(
-                'app.services.payments.abacatepay.service.create_customer',
+                'app.services.payments.abacatepay.checkout.subscriptions.create_customer',
             ) as create_customer_mock,
             patch(
-                'app.services.payments.abacatepay.service.create_subscription',
+                'app.services.payments.abacatepay.checkout.subscriptions.create_subscription',
             ) as create_subscription_mock,
         ):
             with self.assertRaises(HTTPException) as exc_info:
