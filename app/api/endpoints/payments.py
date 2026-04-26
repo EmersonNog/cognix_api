@@ -7,13 +7,12 @@ from app.services.payments import create_subscription_checkout
 
 router = APIRouter()
 
-
 class CreateAbacatePaySubscriptionPayload(BaseModel):
     planId: str
     name: str
     email: str
     taxId: str
-
+    couponCode: str | None = None
 
 @router.post('/abacatepay/subscription')
 def create_abacatepay_subscription(
@@ -26,7 +25,7 @@ def create_abacatepay_subscription(
         name=payload.name,
         email=payload.email,
         tax_id=payload.taxId,
-        coupon_code=None,
+        coupon_code=payload.couponCode,
     )
 
     return {'checkoutUrl': checkout_url}

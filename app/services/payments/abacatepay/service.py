@@ -7,9 +7,8 @@ from sqlalchemy.orm import Session
 
 from .checkout import normalize_checkout_input, validate_checkout_input
 from .client import create_customer, create_subscription
-from .coupons import hash_identifier
+from .coupons import hash_identifier, should_apply_coupon
 from .plans import PLAN_ID_MENSAL, get_plan_config
-
 
 def _new_external_id(plan_id: str) -> str:
     return (
@@ -17,7 +16,6 @@ def _new_external_id(plan_id: str) -> str:
         f'{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}-'
         f'{secrets.token_hex(4)}'
     )
-
 
 def create_subscription_checkout(
     db: Session,
@@ -38,6 +36,7 @@ def create_subscription_checkout(
     validate_checkout_input(checkout)
 
     plan = get_plan_config(checkout.plan_id) 
+    should_apply_coupon(checkout, plan)
     allowed_coupon_code = (
         plan.coupon_code if checkout.plan_id == PLAN_ID_MENSAL else None
     )

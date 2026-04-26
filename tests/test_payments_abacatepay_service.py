@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import Mock, patch
 
+from fastapi import HTTPException
+
 from app.core.config import settings
 from app.services.payments.abacatepay.checkout import CheckoutInput
 from app.services.payments.abacatepay.client import _subscription_payload
@@ -76,6 +78,40 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
             payload['metadata']['firstMonthDiscountCoupon'],
             'COGNIX10',
         )
+
+    def test_invalid_coupon_is_rejected_before_checkout_creation(self) -> None:
+        db = Mock()
+
+        with (
+            patch.object(settings, 'abacatepay_product_id_mensal', 'prod_mensal'),
+            patch.object(settings, 'abacatepay_coupon_mensal_first_month', 'COGNIX10'),
+            patch.object(settings, 'abacatepay_hash_secret', 'test-secret'),
+            patch(
+                'app.services.payments.abacatepay.service.create_customer',
+            ) as create_customer_mock,
+            patch(
+                'app.services.payments.abacatepay.service.create_subscription',
+            ) as create_subscription_mock,
+        ):
+            with self.assertRaises(HTTPException) as exc_info:
+                create_subscription_checkout(
+                    db,
+                    plan_id='mensal',
+                    name='Aluno Teste',
+                    email='aluno@example.com',
+                    tax_id='529.982.247-25',
+                    coupon_code='INVALIDO',
+                )
+
+        self.assertEqual(exc_info.exception.status_code, 400)
+        self.assertEqual(
+            exc_info.exception.detail,
+            'Informe um cupom válido para o primeiro mês.',
+        )
+        create_customer_mock.assert_not_called()
+        create_subscription_mock.assert_not_called()
+        db.execute.assert_not_called()
+        db.commit.assert_not_called()
 
 
 if __name__ == '__main__':
