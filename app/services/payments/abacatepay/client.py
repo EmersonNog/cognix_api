@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import json
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
+import httpx
 from fastapi import HTTPException
 
 from app.core.config import settings
@@ -14,6 +12,7 @@ from .plans import PlanConfig
 
 ABACATEPAY_TIMEOUT_SECONDS = 25
 CHECKOUT_SOURCE = 'cognix_api'
+ABACATEPAY_USER_AGENT = 'CognixHub/1.0 (+https://mkt.cognix-hub.com)'
 
 
 def create_customer(checkout: CheckoutInput, tax_id_hash: str) -> str:
@@ -71,36 +70,51 @@ def _post(path: str, body: dict[str, Any]) -> dict[str, Any]:
             detail='Configure ABACATEPAY_API_KEY no servidor.',
         )
 
-    request = Request(
-        f'{settings.abacatepay_api_base_url.rstrip("/")}{path}',
-        data=json.dumps(body).encode('utf-8'),
-        headers={
-            'Accept': 'application/json',
-            'Authorization': f'Bearer {api_key}',
-            'Content-Type': 'application/json',
-        },
-        method='POST',
-    )
-
     try:
-        with urlopen(request, timeout=ABACATEPAY_TIMEOUT_SECONDS) as response:
-            payload = json.loads(response.read().decode('utf-8'))
-    except HTTPError as exc:
-        raw_error = ''
-
-        try:
-            raw_error = exc.read().decode('utf-8')
-            payload = json.loads(raw_error)
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            payload = {}
-
+        with httpx.Client(
+            base_url=settings.abacatepay_api_base_url.rstrip('/'),
+            headers={
+                'Accept': 'application/json',
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json',
+                'User-Agent': ABACATEPAY_USER_AGENT,
+            },
+            timeout=httpx.Timeout(ABACATEPAY_TIMEOUT_SECONDS),
+            follow_redirects=False,
+        ) as client:
+            response = client.post(path, json=body)
+    except httpx.TimeoutException as exc:
         raise HTTPException(
             status_code=502,
-            detail=_error_message(payload, raw_error),
+            detail='Tempo esgotado ao conectar na AbacatePay.',
         ) from exc
-    except (URLError, TimeoutError) as exc:
-        raise HTTPException(status_code=502, detail='Falha ao conectar na AbacatePay.') from exc
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail='Falha ao conectar na AbacatePay.',
+        ) from exc
+
+    payload = _parse_response_payload(response)
+
+    if response.is_error:
+        raise HTTPException(
+            status_code=502,
+            detail=_error_message(payload, response.text),
+        )
+
+    if payload.get('success') is False:
+        raise HTTPException(
+            status_code=502,
+            detail=_error_message(payload, response.text),
+        )
+
+    return payload
+
+
+def _parse_response_payload(response: httpx.Response) -> dict[str, Any]:
+    try:
+        payload = response.json()
+    except ValueError as exc:
         raise HTTPException(
             status_code=502,
             detail='A AbacatePay retornou uma resposta inesperada.',
@@ -111,9 +125,6 @@ def _post(path: str, body: dict[str, Any]) -> dict[str, Any]:
             status_code=502,
             detail='A AbacatePay retornou uma resposta inesperada.',
         )
-
-    if payload.get('success') is False:
-        raise HTTPException(status_code=502, detail=_error_message(payload, ''))
 
     return payload
 
