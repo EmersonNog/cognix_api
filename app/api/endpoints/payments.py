@@ -69,7 +69,7 @@ def get_abacatepay_current_subscription(
 def cancel_abacatepay_current_subscription(
     db: Session = Depends(get_db),
     user_claims: dict = Depends(get_current_user),
-) -> dict[str, str]:
+) -> dict[str, object]:
     user_id, firebase_uid = require_user_context(
         user_claims,
         require_firebase_uid=True,
