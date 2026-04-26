@@ -2,11 +2,14 @@ import unittest
 from unittest.mock import Mock, patch
 
 from app.core.config import settings
+from app.services.payments.abacatepay.checkout import CheckoutInput
+from app.services.payments.abacatepay.client import _subscription_payload
+from app.services.payments.abacatepay.plans import PlanConfig
 from app.services.payments.abacatepay.service import create_subscription_checkout
 
 
 class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
-    def test_coupon_checkout_creation_does_not_reserve_or_attach_coupon(self) -> None:
+    def test_coupon_checkout_creation_allows_coupon_without_local_reservation(self) -> None:
         db = Mock()
 
         with (
@@ -45,9 +48,33 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
         db.execute.assert_not_called()
         self.assertTrue(
             all(
-                not call.kwargs['apply_coupon']
+                call.kwargs['allowed_coupon_code'] == 'COGNIX10'
                 for call in create_subscription_mock.call_args_list
             )
+        )
+
+    def test_abacatepay_payload_includes_allowed_coupon(self) -> None:
+        checkout = CheckoutInput(
+            plan_id='mensal',
+            name='Aluno Teste',
+            email='aluno@example.com',
+            tax_id='52998224725',
+            coupon_code='',
+        )
+
+        payload = _subscription_payload(
+            checkout=checkout,
+            plan=PlanConfig(product_id='prod_mensal', coupon_code='COGNIX10'),
+            customer_id='cust_123',
+            external_id='cognix-mensal-123',
+            tax_id_hash='tax-hash',
+            allowed_coupon_code='COGNIX10',
+        )
+
+        self.assertEqual(payload['coupons'], ['COGNIX10'])
+        self.assertEqual(
+            payload['metadata']['firstMonthDiscountCoupon'],
+            'COGNIX10',
         )
 
 

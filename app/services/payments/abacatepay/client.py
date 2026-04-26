@@ -35,7 +35,7 @@ def create_subscription(
     customer_id: str,
     external_id: str,
     tax_id_hash: str,
-    apply_coupon: bool,
+    allowed_coupon_code: str | None,
 ) -> tuple[str, object]:
     subscription_response = _post(
         '/subscriptions/create',
@@ -45,7 +45,7 @@ def create_subscription(
             customer_id=customer_id,
             external_id=external_id,
             tax_id_hash=tax_id_hash,
-            apply_coupon=apply_coupon,
+            allowed_coupon_code=allowed_coupon_code,
         ),
     )
     checkout_data = subscription_response.get('data', {})
@@ -175,7 +175,7 @@ def _subscription_payload(
     customer_id: str,
     external_id: str,
     tax_id_hash: str,
-    apply_coupon: bool,
+    allowed_coupon_code: str | None,
 ) -> dict[str, Any]:
     site_url = settings.abacatepay_app_url.rstrip('/')
     payload: dict[str, Any] = {
@@ -188,9 +188,9 @@ def _subscription_payload(
         'metadata': _checkout_metadata(checkout, tax_id_hash),
     }
 
-    if apply_coupon:
-        payload['coupons'] = [checkout.coupon_code]
-        payload['metadata']['firstMonthDiscountCoupon'] = checkout.coupon_code
+    if allowed_coupon_code:
+        payload['coupons'] = [allowed_coupon_code]
+        payload['metadata']['firstMonthDiscountCoupon'] = allowed_coupon_code
 
     return payload
 

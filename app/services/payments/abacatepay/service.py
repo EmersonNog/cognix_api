@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from .checkout import normalize_checkout_input, validate_checkout_input
 from .client import create_customer, create_subscription
 from .coupons import hash_identifier
-from .plans import get_plan_config
+from .plans import PLAN_ID_MENSAL, get_plan_config
 
 
 def _new_external_id(plan_id: str) -> str:
@@ -37,9 +37,10 @@ def create_subscription_checkout(
     )
     validate_checkout_input(checkout)
 
-    plan = get_plan_config(checkout.plan_id)
-    # Do not attach or reserve coupons while the checkout is still unpaid.
-    apply_coupon = False
+    plan = get_plan_config(checkout.plan_id) 
+    allowed_coupon_code = (
+        plan.coupon_code if checkout.plan_id == PLAN_ID_MENSAL else None
+    )
     external_id = _new_external_id(checkout.plan_id)
     tax_id_hash = hash_identifier(checkout.tax_id)
 
@@ -51,7 +52,7 @@ def create_subscription_checkout(
             customer_id=customer_id,
             external_id=external_id,
             tax_id_hash=tax_id_hash,
-            apply_coupon=apply_coupon,
+            allowed_coupon_code=allowed_coupon_code,
         )
 
         db.commit()
