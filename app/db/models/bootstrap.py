@@ -1,3 +1,8 @@
+from contextlib import contextmanager
+from typing import Iterator
+
+from sqlalchemy import text
+
 from .common import metadata
 from .schema import ensure_internal_schema
 from .tables import (
@@ -20,6 +25,28 @@ from .tables import (
     get_writing_submissions_table,
     get_writing_themes_table,
 )
+
+_POSTGRES_BOOTSTRAP_LOCK_ID = 746113361402687281
+
+
+@contextmanager
+def _schema_bootstrap_lock(engine) -> Iterator[None]:
+    if engine.dialect.name != 'postgresql':
+        yield
+        return
+
+    with engine.connect() as connection:
+        connection.execute(
+            text('SELECT pg_advisory_lock(:lock_id)'),
+            {'lock_id': _POSTGRES_BOOTSTRAP_LOCK_ID},
+        )
+        try:
+            yield
+        finally:
+            connection.execute(
+                text('SELECT pg_advisory_unlock(:lock_id)'),
+                {'lock_id': _POSTGRES_BOOTSTRAP_LOCK_ID},
+            )
 
 
 def create_internal_tables(
@@ -70,17 +97,18 @@ def create_internal_tables(
     for table_name, register_table in table_specs:
         register_table(table_name)
 
-    metadata.create_all(
-        bind=engine,
-        tables=[metadata.tables[table_name] for table_name, _ in table_specs],
-    )
-    ensure_internal_schema(
-        engine,
-        users_table_name,
-        question_reports_table_name,
-        multiplayer_rooms_table_name,
-        multiplayer_participants_table_name,
-        sessions_table_name,
-        summaries_table_name,
-        user_summaries_table_name,
-    )
+    with _schema_bootstrap_lock(engine):
+        metadata.create_all(
+            bind=engine,
+            tables=[metadata.tables[table_name] for table_name, _ in table_specs],
+        )
+        ensure_internal_schema(
+            engine,
+            users_table_name,
+            question_reports_table_name,
+            multiplayer_rooms_table_name,
+            multiplayer_participants_table_name,
+            sessions_table_name,
+            summaries_table_name,
+            user_summaries_table_name,
+        )
