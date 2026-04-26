@@ -50,3 +50,13 @@ def parse_coupon_context(external_id: str) -> dict[str, str] | None:
         'tax_id_hash': tax_id_hash,
         'email_hash': email_hash,
     }
+
+
+def parse_plan_id(external_id: str) -> str | None:
+    parts = external_id.split(EXTERNAL_ID_SEPARATOR)
+
+    if len(parts) not in {4, 7} or parts[0] != 'cognix':
+        return None
+
+    plan_id = parts[1].strip()
+    return plan_id or None

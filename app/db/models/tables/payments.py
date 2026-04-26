@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Index, Integer, String, Table, Text, UniqueConstraint
+from sqlalchemy import Column, DateTime, Index, Integer, String, Table, Text, UniqueConstraint
 
 from ..common import _id_column, _timestamp_columns, metadata
 
@@ -50,6 +50,7 @@ def get_payment_subscriptions_table(table_name: str) -> Table:
         Column('checkout_url', Text, nullable=True),
         Column('external_id', String(255), nullable=False, unique=True),
         Column('status', String(64), nullable=False, default='checkout_created'),
+        Column('current_period_ends_at', DateTime(timezone=True), nullable=True),
         Column('cancel_requested_at', Text, nullable=True),
         Column('cancelled_at', Text, nullable=True),
         *_timestamp_columns(),

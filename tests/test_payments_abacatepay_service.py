@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
 from fastapi import HTTPException
@@ -12,6 +13,7 @@ from app.services.payments.abacatepay.gateway.payloads import subscription_paylo
 from app.services.payments.abacatepay.shared.plans import PlanConfig
 from app.services.payments.abacatepay.subscriptions.current import (
     cancel_current_subscription,
+    get_current_subscription_status,
 )
 from app.services.payments.abacatepay.webhooks.handlers import (
     handle_abacatepay_webhook,
@@ -122,7 +124,7 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
         self.assertEqual(exc_info.exception.status_code, 409)
         self.assertEqual(
             exc_info.exception.detail,
-            'Este CPF ou email ja utilizou o desconto de primeiro mes.',
+            'Este CPF ou email já utilizou o desconto de primeiro mês.',
         )
         create_customer_mock.assert_not_called()
         create_subscription_mock.assert_not_called()
@@ -245,13 +247,16 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
 
     def test_cancel_current_subscription_calls_abacatepay_and_marks_cancelled(self) -> None:
         db = Mock()
+        period_end = datetime(2099, 5, 26, tzinfo=timezone.utc)
         db.execute.return_value.mappings.return_value.first.return_value = {
             'id': 10,
             'user_id': 7,
             'firebase_uid': 'firebase-7',
             'email_hash': 'emailhash',
+            'plan_id': 'mensal',
             'status': 'active',
             'external_subscription_id': 'subs_123',
+            'current_period_ends_at': period_end,
         }
 
         with (
@@ -267,9 +272,43 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
                 email='aluno@example.com',
             )
 
-        self.assertEqual(result, {'status': 'cancelled'})
+        self.assertEqual(
+            result,
+            {
+                'status': 'cancelled',
+                'hasAccess': True,
+                'accessEndsAt': '2099-05-26T00:00:00+00:00',
+            },
+        )
         cancel_subscription_mock.assert_called_once_with('subs_123')
         db.commit.assert_called_once()
+
+    def test_current_subscription_status_keeps_cancelled_access_until_period_end(self) -> None:
+        db = Mock()
+        db.execute.return_value.mappings.return_value.first.return_value = {
+            'id': 10,
+            'user_id': 7,
+            'firebase_uid': 'firebase-7',
+            'email_hash': 'emailhash',
+            'plan_id': 'mensal',
+            'status': 'cancelled',
+            'external_subscription_id': 'subs_123',
+            'current_period_ends_at': datetime(2099, 5, 26, tzinfo=timezone.utc),
+        }
+
+        with patch.object(settings, 'abacatepay_hash_secret', 'test-secret'):
+            result = get_current_subscription_status(
+                db,
+                user_id=7,
+                firebase_uid='firebase-7',
+                email='aluno@example.com',
+            )
+
+        self.assertEqual(result['status'], 'cancelled')
+        self.assertTrue(result['hasAccess'])
+        self.assertFalse(result['canCancel'])
+        self.assertTrue(result['willCancelAtPeriodEnd'])
+        self.assertEqual(result['accessEndsAt'], '2099-05-26T00:00:00+00:00')
 
     def test_cancel_current_subscription_rejects_missing_active_subscription(self) -> None:
         db = Mock()

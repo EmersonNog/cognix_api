@@ -3,8 +3,9 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from ..coupons.redemptions import record_coupon_redeemed
-from ..shared.external_ids import parse_coupon_context
+from ..shared.external_ids import parse_coupon_context, parse_plan_id
 from ..shared.plans import get_plan_config
+from ..subscriptions.periods import parse_api_datetime, resolve_period_end
 from ..subscriptions.records import (
     mark_subscription_active,
     mark_subscription_cancelled_by_external_id,
@@ -45,6 +46,32 @@ def handle_abacatepay_webhook(db: Session, payload: dict) -> dict[str, str]:
     )
     checkout_id = _first_text(checkout.get('id'), payment.get('id'))
     checkout_url = _first_text(checkout.get('url'))
+    period_started_at = _first_datetime(
+        subscription.get('currentPeriodStart'),
+        subscription.get('current_period_start'),
+        payment.get('paidAt'),
+        payment.get('paid_at'),
+        checkout.get('paidAt'),
+        checkout.get('paid_at'),
+        data.get('paidAt'),
+        data.get('createdAt'),
+        payload.get('createdAt'),
+    )
+    explicit_period_end = _first_datetime(
+        subscription.get('currentPeriodEnd'),
+        subscription.get('current_period_end'),
+        subscription.get('nextBillingDate'),
+        subscription.get('next_billing_date'),
+        subscription.get('expiresAt'),
+        subscription.get('expires_at'),
+        payment.get('nextBillingDate'),
+        payment.get('next_billing_date'),
+    )
+    current_period_ends_at = resolve_period_end(
+        plan_id=parse_plan_id(external_id),
+        explicit_period_end=explicit_period_end,
+        period_started_at=period_started_at,
+    )
 
     if event == 'subscription.cancelled':
         mark_subscription_cancelled_by_external_id(
@@ -61,6 +88,7 @@ def handle_abacatepay_webhook(db: Session, payload: dict) -> dict[str, str]:
         external_subscription_id=external_subscription_id,
         checkout_id=checkout_id,
         checkout_url=checkout_url,
+        current_period_ends_at=current_period_ends_at,
     )
 
     coupon_context = parse_coupon_context(external_id)
@@ -93,5 +121,14 @@ def _first_text(*values: object) -> str | None:
     for value in values:
         if isinstance(value, str) and value.strip():
             return value.strip()
+
+    return None
+
+
+def _first_datetime(*values: object):
+    for value in values:
+        parsed = parse_api_datetime(value)
+        if parsed is not None:
+            return parsed
 
     return None

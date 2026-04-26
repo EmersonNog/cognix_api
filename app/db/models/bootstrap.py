@@ -115,4 +115,5 @@ def create_internal_tables(
             sessions_table_name,
             summaries_table_name,
             user_summaries_table_name,
+            payment_subscriptions_table_name,
         )

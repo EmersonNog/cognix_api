@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import and_, desc, insert, or_, select, update
 from sqlalchemy.orm import Session
 
@@ -51,13 +53,18 @@ def mark_subscription_active(
     external_subscription_id: str | None,
     checkout_id: str | None,
     checkout_url: str | None,
+    current_period_ends_at: datetime | None,
 ) -> None:
     table = get_payment_subscriptions_table(settings.payment_subscriptions_table)
     values = {
         'status': 'active',
+        'cancel_requested_at': None,
+        'cancelled_at': None,
         'updated_at': utc_now(),
     }
 
+    if current_period_ends_at:
+        values['current_period_ends_at'] = current_period_ends_at
     if external_subscription_id:
         values['external_subscription_id'] = external_subscription_id
     if checkout_id:
@@ -72,18 +79,24 @@ def mark_subscription_cancelled(
     db: Session,
     *,
     subscription_id: int,
+    current_period_ends_at: datetime | None = None,
 ) -> None:
     table = get_payment_subscriptions_table(settings.payment_subscriptions_table)
     now = utc_now()
+    values = {
+        'status': 'cancelled',
+        'cancel_requested_at': now,
+        'cancelled_at': now,
+        'updated_at': now,
+    }
+
+    if current_period_ends_at:
+        values['current_period_ends_at'] = current_period_ends_at
+
     db.execute(
         update(table)
         .where(table.c.id == subscription_id)
-        .values(
-            status='cancelled',
-            cancel_requested_at=now,
-            cancelled_at=now,
-            updated_at=now,
-        )
+        .values(**values)
     )
 
 
