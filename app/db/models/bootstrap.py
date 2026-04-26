@@ -13,6 +13,7 @@ from .tables import (
     get_flashcards_table,
     get_multiplayer_participants_table,
     get_multiplayer_rooms_table,
+    get_payment_subscriptions_table,
     get_question_reports_table,
     get_session_history_table,
     get_sessions_table,
@@ -69,6 +70,7 @@ def create_internal_tables(
     writing_submissions_table_name: str,
     writing_submission_versions_table_name: str,
     coupon_redemptions_table_name: str,
+    payment_subscriptions_table_name: str,
 ) -> None:
     table_specs = [
         (users_table_name, get_users_table),
@@ -93,6 +95,7 @@ def create_internal_tables(
             get_writing_submission_versions_table,
         ),
         (coupon_redemptions_table_name, get_coupon_redemptions_table),
+        (payment_subscriptions_table_name, get_payment_subscriptions_table),
     ]
 
     for table_name, register_table in table_specs:

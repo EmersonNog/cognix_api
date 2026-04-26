@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     writing_submissions_table: str = 'writing_submissions'
     writing_submission_versions_table: str = 'writing_submission_versions'
     coupon_redemptions_table: str = 'coupon_redemptions'
+    payment_subscriptions_table: str = 'payment_subscriptions'
     allowed_origins: list[str] = ['*']
     firebase_credentials: str | None = None
     firebase_clock_skew_seconds: int = 5

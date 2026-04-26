@@ -10,6 +10,7 @@ from ..gateway.customers import create_customer
 from ..gateway.subscriptions import create_subscription
 from ..shared.external_ids import new_external_id
 from ..shared.plans import get_plan_config
+from ..subscriptions.records import record_subscription_checkout_created
 
 def create_subscription_checkout(
     db: Session,
@@ -51,13 +52,24 @@ def create_subscription_checkout(
 
     try:
         customer_id = create_customer(checkout, tax_id_hash)
-        checkout_url, _checkout_id = create_subscription(
+        checkout_url, checkout_id = create_subscription(
             checkout=checkout,
             plan=plan,
             customer_id=customer_id,
             external_id=external_id,
             tax_id_hash=tax_id_hash,
             allowed_coupon_code=allowed_coupon_code,
+        )
+        record_subscription_checkout_created(
+            db,
+            plan_id=checkout.plan_id,
+            product_id=plan.product_id,
+            tax_id_hash=tax_id_hash,
+            email_hash=email_hash,
+            external_customer_id=customer_id,
+            external_id=external_id,
+            checkout_id=str(checkout_id) if checkout_id else None,
+            checkout_url=checkout_url,
         )
 
         db.commit()

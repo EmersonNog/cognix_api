@@ -10,6 +10,9 @@ from app.services.payments.abacatepay.checkout.subscriptions import (
 )
 from app.services.payments.abacatepay.gateway.payloads import subscription_payload
 from app.services.payments.abacatepay.shared.plans import PlanConfig
+from app.services.payments.abacatepay.subscriptions.current import (
+    cancel_current_subscription,
+)
 from app.services.payments.abacatepay.webhooks.handlers import (
     handle_abacatepay_webhook,
 )
@@ -44,7 +47,7 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
 
         self.assertEqual(checkout_url, 'https://app.abacatepay.com/pay/bill_123')
         db.commit.assert_called_once()
-        db.execute.assert_called_once()
+        self.assertEqual(db.execute.call_count, 2)
         create_subscription_mock.assert_called_once()
         self.assertEqual(
             create_subscription_mock.call_args.kwargs['allowed_coupon_code'],
@@ -87,7 +90,7 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
 
         self.assertEqual(first_url, 'https://app.abacatepay.com/pay/bill_123')
         self.assertEqual(second_url, 'https://app.abacatepay.com/pay/bill_123')
-        self.assertEqual(db.execute.call_count, 2)
+        self.assertEqual(db.execute.call_count, 4)
         self.assertEqual(db.commit.call_count, 2)
         self.assertEqual(create_subscription_mock.call_count, 2)
 
@@ -152,7 +155,7 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
 
         self.assertEqual(checkout_url, 'https://app.abacatepay.com/pay/bill_123')
         db.commit.assert_called_once()
-        db.execute.assert_not_called()
+        db.execute.assert_called_once()
         create_subscription_mock.assert_called_once()
         self.assertIsNone(
             create_subscription_mock.call_args.kwargs['allowed_coupon_code'],
@@ -237,8 +240,52 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
         result = handle_abacatepay_webhook(db, payload)
 
         self.assertEqual(result, {'status': 'ok'})
-        self.assertEqual(db.execute.call_count, 2)
+        self.assertEqual(db.execute.call_count, 3)
         db.commit.assert_called_once()
+
+    def test_cancel_current_subscription_calls_abacatepay_and_marks_cancelled(self) -> None:
+        db = Mock()
+        db.execute.return_value.mappings.return_value.first.return_value = {
+            'id': 10,
+            'user_id': 7,
+            'firebase_uid': 'firebase-7',
+            'email_hash': 'emailhash',
+            'status': 'active',
+            'external_subscription_id': 'subs_123',
+        }
+
+        with (
+            patch.object(settings, 'abacatepay_hash_secret', 'test-secret'),
+            patch(
+                'app.services.payments.abacatepay.subscriptions.current.cancel_subscription',
+            ) as cancel_subscription_mock,
+        ):
+            result = cancel_current_subscription(
+                db,
+                user_id=7,
+                firebase_uid='firebase-7',
+                email='aluno@example.com',
+            )
+
+        self.assertEqual(result, {'status': 'cancelled'})
+        cancel_subscription_mock.assert_called_once_with('subs_123')
+        db.commit.assert_called_once()
+
+    def test_cancel_current_subscription_rejects_missing_active_subscription(self) -> None:
+        db = Mock()
+        db.execute.return_value.mappings.return_value.first.return_value = None
+
+        with patch.object(settings, 'abacatepay_hash_secret', 'test-secret'):
+            with self.assertRaises(HTTPException) as exc_info:
+                cancel_current_subscription(
+                    db,
+                    user_id=7,
+                    firebase_uid='firebase-7',
+                    email='aluno@example.com',
+                )
+
+        self.assertEqual(exc_info.exception.status_code, 404)
+        db.commit.assert_not_called()
 
 
 if __name__ == '__main__':

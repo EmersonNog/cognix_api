@@ -34,7 +34,6 @@ def ensure_coupon_not_redeemed(
             detail='Este CPF ou email já utilizou o desconto de primeiro mês.',
         )
 
-
 def record_coupon_redeemed(
     db: Session,
     *,
