@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     writing_themes_table: str = 'writing_themes'
     writing_submissions_table: str = 'writing_submissions'
     writing_submission_versions_table: str = 'writing_submission_versions'
+    coupon_redemptions_table: str = 'coupon_redemptions'
     allowed_origins: list[str] = ['*']
     firebase_credentials: str | None = None
     firebase_clock_skew_seconds: int = 5
@@ -34,5 +35,12 @@ class Settings(BaseSettings):
     gemini_model: str = 'gemini-2.5-flash-lite'
     profile_ai_insight_ttl_minutes: int = 1440
     app_timezone: str = 'America/Sao_Paulo'
+    abacatepay_api_key: str | None = None
+    abacatepay_api_base_url: str = 'https://api.abacatepay.com/v2'
+    abacatepay_app_url: str = 'https://mkt.cognix-hub.com'
+    abacatepay_product_id_mensal: str | None = None
+    abacatepay_product_id_anual: str | None = None
+    abacatepay_coupon_mensal_first_month: str | None = None
+    abacatepay_hash_secret: str | None = None
 
 settings = Settings()

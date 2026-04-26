@@ -46,6 +46,7 @@ def _create_internal_tables() -> None:
         settings.writing_themes_table,
         settings.writing_submissions_table,
         settings.writing_submission_versions_table,
+        settings.coupon_redemptions_table,
     )
 
 def create_app() -> FastAPI:

@@ -8,6 +8,7 @@ from .multiplayer import (
     get_multiplayer_participants_table,
     get_multiplayer_rooms_table,
 )
+from .payments import get_coupon_redemptions_table
 from .summaries import get_summaries_table, get_user_summaries_table
 from .training import get_session_history_table, get_sessions_table
 from .flashcards import get_flashcard_deck_states_table, get_flashcards_table
@@ -26,6 +27,7 @@ from .writing import (
 __all__ = [
     'get_attempt_history_table',
     'get_attempts_table',
+    'get_coupon_redemptions_table',
     'get_flashcard_deck_states_table',
     'get_flashcards_table',
     'get_multiplayer_participants_table',

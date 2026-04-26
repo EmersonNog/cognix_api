@@ -3,6 +3,7 @@ from .common import metadata
 from .tables import (
     get_attempt_history_table,
     get_attempts_table,
+    get_coupon_redemptions_table,
     get_flashcard_deck_states_table,
     get_flashcards_table,
     get_multiplayer_participants_table,
@@ -27,6 +28,7 @@ __all__ = [
     'ensure_internal_schema',
     'get_attempt_history_table',
     'get_attempts_table',
+    'get_coupon_redemptions_table',
     'get_flashcard_deck_states_table',
     'get_flashcards_table',
     'get_multiplayer_participants_table',

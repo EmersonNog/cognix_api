@@ -8,6 +8,7 @@ from .schema import ensure_internal_schema
 from .tables import (
     get_attempt_history_table,
     get_attempts_table,
+    get_coupon_redemptions_table,
     get_flashcard_deck_states_table,
     get_flashcards_table,
     get_multiplayer_participants_table,
@@ -69,6 +70,7 @@ def create_internal_tables(
     writing_themes_table_name: str,
     writing_submissions_table_name: str,
     writing_submission_versions_table_name: str,
+    coupon_redemptions_table_name: str,
 ) -> None:
     table_specs = [
         (users_table_name, get_users_table),
@@ -92,6 +94,7 @@ def create_internal_tables(
             writing_submission_versions_table_name,
             get_writing_submission_versions_table,
         ),
+        (coupon_redemptions_table_name, get_coupon_redemptions_table),
     ]
 
     for table_name, register_table in table_specs:

@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.endpoints.attempts import router as attempts_router
 from app.api.endpoints.flashcards import router as flashcards_router
 from app.api.endpoints.multiplayer import router as multiplayer_router
+from app.api.endpoints.payments import router as payments_router
 from app.api.endpoints.questions import router as questions_router
 from app.api.endpoints.sessions import router as sessions_router
 from app.api.endpoints.study_plan import router as study_plan_router
@@ -20,6 +21,7 @@ def create_api_router() -> APIRouter:
         prefix='/multiplayer',
         tags=['multiplayer'],
     )
+    router.include_router(payments_router, prefix='/payments', tags=['payments'])
     router.include_router(questions_router, prefix='/questions', tags=['questions'])
     router.include_router(sessions_router, prefix='/sessions', tags=['sessions'])
     router.include_router(study_plan_router, prefix='/study-plan', tags=['study-plan'])
