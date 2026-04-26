@@ -42,5 +42,6 @@ class Settings(BaseSettings):
     abacatepay_product_id_anual: str | None = None
     abacatepay_coupon_mensal_first_month: str | None = None
     abacatepay_hash_secret: str | None = None
+    abacatepay_webhook_secret: str | None = None
 
 settings = Settings()

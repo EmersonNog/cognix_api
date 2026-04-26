@@ -1,9 +1,16 @@
+import hmac
+import json
+
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.services.payments import create_subscription_checkout
+from app.core.config import settings
+from app.services.payments import (
+    create_subscription_checkout,
+    handle_abacatepay_webhook,
+)
 
 router = APIRouter()
 
@@ -29,3 +36,31 @@ def create_abacatepay_subscription(
     )
 
     return {'checkoutUrl': checkout_url}
+
+
+@router.post('/abacatepay/webhook')
+async def receive_abacatepay_webhook(
+    request: Request,
+    webhook_secret: str | None = Query(default=None, alias='webhookSecret'),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    raw_body = await request.body()
+
+    _validate_webhook_secret(webhook_secret)
+
+    try:
+        payload = json.loads(raw_body.decode('utf-8'))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=400, detail='Payload de webhook invalido.') from exc
+
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail='Payload de webhook invalido.')
+
+    return handle_abacatepay_webhook(db, payload)
+
+
+def _validate_webhook_secret(received_secret: str | None) -> None:
+    expected_secret = settings.abacatepay_webhook_secret
+
+    if expected_secret and not hmac.compare_digest(received_secret or '', expected_secret):
+        raise HTTPException(status_code=401, detail='Webhook nao autorizado.')
