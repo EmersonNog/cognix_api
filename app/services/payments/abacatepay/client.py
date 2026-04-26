@@ -86,13 +86,18 @@ def _post(path: str, body: dict[str, Any]) -> dict[str, Any]:
         with urlopen(request, timeout=ABACATEPAY_TIMEOUT_SECONDS) as response:
             payload = json.loads(response.read().decode('utf-8'))
     except HTTPError as exc:
+        raw_error = ''
+
         try:
-            payload = json.loads(exc.read().decode('utf-8'))
+            raw_error = exc.read().decode('utf-8')
+            payload = json.loads(raw_error)
         except (json.JSONDecodeError, UnicodeDecodeError):
             payload = {}
 
-        message = payload.get('error') or payload.get('message') or 'A AbacatePay recusou a requisição.'
-        raise HTTPException(status_code=502, detail=str(message)) from exc
+        raise HTTPException(
+            status_code=502,
+            detail=_error_message(payload, raw_error),
+        ) from exc
     except (URLError, TimeoutError) as exc:
         raise HTTPException(status_code=502, detail='Falha ao conectar na AbacatePay.') from exc
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
@@ -108,12 +113,39 @@ def _post(path: str, body: dict[str, Any]) -> dict[str, Any]:
         )
 
     if payload.get('success') is False:
-        raise HTTPException(
-            status_code=502,
-            detail=str(payload.get('error') or 'A AbacatePay recusou a requisição.'),
-        )
+        raise HTTPException(status_code=502, detail=_error_message(payload, ''))
 
     return payload
+
+
+def _error_message(payload: dict[str, Any], raw_error: str) -> str:
+    for field in ('error', 'message', 'detail'):
+        value = payload.get(field)
+
+        if isinstance(value, str) and value.strip():
+            return value
+
+        if isinstance(value, dict):
+            nested_message = _error_message(value, '')
+
+            if nested_message != 'A AbacatePay recusou a requisição.':
+                return nested_message
+
+    errors = payload.get('errors')
+
+    if isinstance(errors, list) and errors:
+        first_error = errors[0]
+
+        if isinstance(first_error, str) and first_error.strip():
+            return first_error
+
+        if isinstance(first_error, dict):
+            return _error_message(first_error, '')
+
+    if raw_error.strip():
+        return raw_error.strip()[:600]
+
+    return 'A AbacatePay recusou a requisição.'
 
 
 def _customer_payload(checkout: CheckoutInput, tax_id_hash: str) -> dict[str, Any]:
