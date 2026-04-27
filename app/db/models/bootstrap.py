@@ -27,6 +27,7 @@ from .tables import (
     get_writing_submissions_table,
     get_writing_themes_table,
 )
+from .tables.entitlements import get_user_access_grants_table
 
 _POSTGRES_BOOTSTRAP_LOCK_ID = 746113361402687281
 
@@ -71,6 +72,7 @@ def create_internal_tables(
     writing_submission_versions_table_name: str,
     coupon_redemptions_table_name: str,
     payment_subscriptions_table_name: str,
+    user_access_grants_table_name: str,
 ) -> None:
     table_specs = [
         (users_table_name, get_users_table),
@@ -96,6 +98,7 @@ def create_internal_tables(
         ),
         (coupon_redemptions_table_name, get_coupon_redemptions_table),
         (payment_subscriptions_table_name, get_payment_subscriptions_table),
+        (user_access_grants_table_name, get_user_access_grants_table),
     ]
 
     for table_name, register_table in table_specs:
@@ -116,4 +119,5 @@ def create_internal_tables(
             summaries_table_name,
             user_summaries_table_name,
             payment_subscriptions_table_name,
+            user_access_grants_table_name,
         )

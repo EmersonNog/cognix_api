@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import and_, desc, insert, or_, select, update
+from sqlalchemy import desc, insert, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -93,11 +93,7 @@ def mark_subscription_cancelled(
     if current_period_ends_at:
         values['current_period_ends_at'] = current_period_ends_at
 
-    db.execute(
-        update(table)
-        .where(table.c.id == subscription_id)
-        .values(**values)
-    )
+    db.execute(update(table).where(table.c.id == subscription_id).values(**values))
 
 
 def mark_subscription_cancelled_by_external_id(

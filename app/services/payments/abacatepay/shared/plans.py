@@ -25,7 +25,7 @@ def get_plan_config(plan_id: str) -> PlanConfig:
         product_id = settings.abacatepay_product_id_anual
         coupon_code = None
     else:
-        raise HTTPException(status_code=400, detail='Plano invalido.')
+        raise HTTPException(status_code=400, detail='Plano inválido.')
 
     if not product_id:
         raise HTTPException(

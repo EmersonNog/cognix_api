@@ -7,7 +7,6 @@ from app.core.datetime_utils import ensure_utc, utc_now
 
 from ..shared.plans import PLAN_ID_ANUAL
 
-
 def resolve_period_end(
     *,
     plan_id: str | None,
@@ -23,7 +22,6 @@ def resolve_period_end(
         return _add_years(start, 1)
 
     return _add_months(start, 1)
-
 
 def parse_api_datetime(value: object) -> datetime | None:
     if isinstance(value, datetime):
@@ -41,14 +39,12 @@ def parse_api_datetime(value: object) -> datetime | None:
     except ValueError:
         return None
 
-
 def _add_months(value: datetime, months: int) -> datetime:
     month_index = (value.month - 1) + months
     year = value.year + (month_index // 12)
     month = (month_index % 12) + 1
     day = min(value.day, monthrange(year, month)[1])
     return value.replace(year=year, month=month, day=day)
-
 
 def _add_years(value: datetime, years: int) -> datetime:
     year = value.year + years

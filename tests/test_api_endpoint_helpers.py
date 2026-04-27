@@ -4,6 +4,7 @@ from unittest.mock import patch
 from fastapi import HTTPException
 
 from app.api.endpoints.helpers import (
+    current_user_email,
     normalize_required_text,
     require_recent_authentication,
     require_user_context,
@@ -52,6 +53,23 @@ class ApiEndpointHelpersTests(unittest.TestCase):
         self.assertEqual(
             exc_info.exception.detail,
             'Recent authentication required',
+        )
+
+    def test_current_user_email_prefers_claim_email(self) -> None:
+        self.assertEqual(
+            current_user_email(
+                {
+                    'email': 'claim@example.com',
+                    'internal_user': {'email': 'internal@example.com'},
+                }
+            ),
+            'claim@example.com',
+        )
+
+    def test_current_user_email_falls_back_to_internal_user_email(self) -> None:
+        self.assertEqual(
+            current_user_email({'internal_user': {'email': 'internal@example.com'}}),
+            'internal@example.com',
         )
 
     def test_normalize_required_text_trims_values(self) -> None:

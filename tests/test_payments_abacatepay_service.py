@@ -245,6 +245,41 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
         self.assertEqual(db.execute.call_count, 3)
         db.commit.assert_called_once()
 
+    def test_webhook_ignores_unsupported_event(self) -> None:
+        db = Mock()
+
+        result = handle_abacatepay_webhook(db, {'event': 'customer.created'})
+
+        self.assertEqual(result, {'status': 'ignored'})
+        db.execute.assert_not_called()
+        db.commit.assert_not_called()
+
+    def test_webhook_cancel_marks_subscription_cancelled(self) -> None:
+        db = Mock()
+        payload = {
+            'event': 'subscription.cancelled',
+            'data': {
+                'subscription': {
+                    'id': 'subs_123',
+                    'externalId': 'cognix.mensal.20260426120000.abc123',
+                },
+            },
+        }
+
+        with patch(
+            'app.services.payments.abacatepay.webhooks.subscriptions.'
+            'mark_subscription_cancelled_by_external_id',
+        ) as mark_cancelled_mock:
+            result = handle_abacatepay_webhook(db, payload)
+
+        self.assertEqual(result, {'status': 'ok'})
+        mark_cancelled_mock.assert_called_once_with(
+            db,
+            external_id='cognix.mensal.20260426120000.abc123',
+            external_subscription_id='subs_123',
+        )
+        db.commit.assert_called_once()
+
     def test_cancel_current_subscription_calls_abacatepay_and_marks_cancelled(self) -> None:
         db = Mock()
         period_end = datetime(2099, 5, 26, tzinfo=timezone.utc)
@@ -262,7 +297,8 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
         with (
             patch.object(settings, 'abacatepay_hash_secret', 'test-secret'),
             patch(
-                'app.services.payments.abacatepay.subscriptions.current.cancel_subscription',
+                'app.services.payments.abacatepay.subscriptions.lifecycle.cancellations.'
+                'cancel_subscription',
             ) as cancel_subscription_mock,
         ):
             result = cancel_current_subscription(

@@ -3,14 +3,12 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from .inputs import normalize_checkout_input, validate_checkout_input
-from ..coupons.identifiers import hash_identifier
 from ..coupons.redemptions import ensure_coupon_not_redeemed
-from ..coupons.rules import should_apply_coupon
+from .preparation import prepare_checkout_subscription
 from ..gateway.customers import create_customer
 from ..gateway.subscriptions import create_subscription
-from ..shared.external_ids import new_external_id
-from ..shared.plans import get_plan_config
-from ..subscriptions.records import record_subscription_checkout_created
+from ..subscriptions.persistence.records import record_subscription_checkout_created
+
 
 def create_subscription_checkout(
     db: Session,
@@ -30,44 +28,34 @@ def create_subscription_checkout(
     )
     validate_checkout_input(checkout)
 
-    plan = get_plan_config(checkout.plan_id) 
-    apply_coupon = should_apply_coupon(checkout, plan)
-    allowed_coupon_code = checkout.coupon_code if apply_coupon else None
-    tax_id_hash = hash_identifier(checkout.tax_id)
-    email_hash = hash_identifier(checkout.email)
-    external_id = new_external_id(
-        checkout.plan_id,
-        coupon_code=checkout.coupon_code if apply_coupon else None,
-        tax_id_hash=tax_id_hash if apply_coupon else None,
-        email_hash=email_hash if apply_coupon else None,
-    )
+    prepared = prepare_checkout_subscription(checkout)
 
-    if apply_coupon:
+    if prepared.apply_coupon:
         ensure_coupon_not_redeemed(
             db,
             coupon_code=checkout.coupon_code,
-            tax_id_hash=tax_id_hash,
-            email_hash=email_hash,
+            tax_id_hash=prepared.tax_id_hash,
+            email_hash=prepared.email_hash,
         )
 
     try:
-        customer_id = create_customer(checkout, tax_id_hash)
+        customer_id = create_customer(checkout, prepared.tax_id_hash)
         checkout_url, checkout_id = create_subscription(
             checkout=checkout,
-            plan=plan,
+            plan=prepared.plan,
             customer_id=customer_id,
-            external_id=external_id,
-            tax_id_hash=tax_id_hash,
-            allowed_coupon_code=allowed_coupon_code,
+            external_id=prepared.external_id,
+            tax_id_hash=prepared.tax_id_hash,
+            allowed_coupon_code=prepared.allowed_coupon_code,
         )
         record_subscription_checkout_created(
             db,
             plan_id=checkout.plan_id,
-            product_id=plan.product_id,
-            tax_id_hash=tax_id_hash,
-            email_hash=email_hash,
+            product_id=prepared.plan.product_id,
+            tax_id_hash=prepared.tax_id_hash,
+            email_hash=prepared.email_hash,
             external_customer_id=customer_id,
-            external_id=external_id,
+            external_id=prepared.external_id,
             checkout_id=str(checkout_id) if checkout_id else None,
             checkout_url=checkout_url,
         )

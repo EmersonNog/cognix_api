@@ -6,7 +6,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.api.endpoints.helpers import require_user_context
+from app.api.endpoints.helpers import (
+    current_user_email as _current_user_email,
+    require_user_context,
+)
 from app.core.config import settings
 from app.services.payments.abacatepay.checkout.subscriptions import (
     create_subscription_checkout,
@@ -21,14 +24,12 @@ from app.services.payments.abacatepay.webhooks.handlers import (
 
 router = APIRouter()
 
-
 class CreateAbacatePaySubscriptionPayload(BaseModel):
     planId: str
     name: str
     email: str
     taxId: str
     couponCode: str | None = None
-
 
 @router.post('/abacatepay/subscription')
 def create_abacatepay_subscription(
@@ -45,7 +46,6 @@ def create_abacatepay_subscription(
     )
 
     return {'checkoutUrl': checkout_url}
-
 
 @router.get('/abacatepay/subscription/current')
 def get_abacatepay_current_subscription(
@@ -64,7 +64,6 @@ def get_abacatepay_current_subscription(
         email=_current_user_email(user_claims),
     )
 
-
 @router.post('/abacatepay/subscription/cancel')
 def cancel_abacatepay_current_subscription(
     db: Session = Depends(get_db),
@@ -82,7 +81,6 @@ def cancel_abacatepay_current_subscription(
         email=_current_user_email(user_claims),
     )
 
-
 @router.post('/abacatepay/webhook')
 async def receive_abacatepay_webhook(
     request: Request,
@@ -98,22 +96,19 @@ async def receive_abacatepay_webhook(
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise HTTPException(
             status_code=400,
-            detail='Payload de webhook invalido.',
+            detail='Payload de webhook inválido.',
         ) from exc
 
     if not isinstance(payload, dict):
-        raise HTTPException(status_code=400, detail='Payload de webhook invalido.')
+        raise HTTPException(status_code=400, detail='Payload de webhook inválido.')
 
     return handle_abacatepay_webhook(db, payload)
-
 
 def _validate_webhook_secret(received_secret: str | None) -> None:
     expected_secret = settings.abacatepay_webhook_secret
 
-    if expected_secret and not hmac.compare_digest(received_secret or '', expected_secret):
-        raise HTTPException(status_code=401, detail='Webhook nao autorizado.')
-
-
-def _current_user_email(user_claims: dict) -> str | None:
-    internal_user = user_claims.get('internal_user') or {}
-    return user_claims.get('email') or internal_user.get('email')
+    if expected_secret and not hmac.compare_digest(
+        received_secret or '',
+        expected_secret,
+    ):
+        raise HTTPException(status_code=401, detail='Webhook não autorizado.')

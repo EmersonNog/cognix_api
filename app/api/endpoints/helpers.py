@@ -61,6 +61,11 @@ def require_recent_authentication(
         raise HTTPException(status_code=403, detail='Recent authentication required')
 
 
+def current_user_email(user_claims: Mapping[str, Any]) -> str | None:
+    internal_user = user_claims.get('internal_user') or {}
+    return user_claims.get('email') or internal_user.get('email')
+
+
 def normalize_required_text(field_name: str, value: object) -> str:
     normalized = str(value or '').strip()
     if not normalized:

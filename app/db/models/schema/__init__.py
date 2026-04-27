@@ -1,3 +1,4 @@
+from .entitlements import ensure_user_access_grants_schema
 from .multiplayer import ensure_multiplayer_schema
 from .payments import ensure_payment_subscriptions_schema
 from .question_reports import ensure_question_reports_schema
@@ -16,6 +17,7 @@ def ensure_internal_schema(
     summaries_table_name: str,
     user_summaries_table_name: str,
     payment_subscriptions_table_name: str,
+    user_access_grants_table_name: str,
 ) -> None:
     ensure_users_schema(engine, users_table_name)
     ensure_question_reports_schema(engine, question_reports_table_name)
@@ -28,3 +30,4 @@ def ensure_internal_schema(
     ensure_summary_payload_schema(engine, summaries_table_name)
     ensure_summary_payload_schema(engine, user_summaries_table_name)
     ensure_payment_subscriptions_schema(engine, payment_subscriptions_table_name)
+    ensure_user_access_grants_schema(engine, user_access_grants_table_name)
