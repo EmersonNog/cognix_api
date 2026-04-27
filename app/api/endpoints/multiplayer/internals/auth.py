@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 
+from app.api.deps.entitlements import ensure_full_access_for_claims
 from app.api.deps.users import sync_internal_user
 from app.api.endpoints.helpers import require_user_context
 from app.core.security import verify_firebase_token
@@ -26,7 +27,9 @@ def authenticate_websocket(token: str) -> dict:
     db = SessionLocal()
     try:
         claims = verify_firebase_token(token)
-        return sync_internal_user(db, claims)
+        user_claims = sync_internal_user(db, claims)
+        ensure_full_access_for_claims(db, user_claims)
+        return user_claims
     finally:
         db.close()
 

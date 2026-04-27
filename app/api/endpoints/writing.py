@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.api.deps.entitlements import require_full_access
 from app.api.endpoints.helpers import require_user_context
 from app.services.writing import (
     analyze_writing,
@@ -14,7 +15,7 @@ from app.services.writing import (
     list_writing_themes,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_full_access)])
 
 
 @router.get('/themes', dependencies=[Depends(get_current_user)])

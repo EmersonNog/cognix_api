@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.api.deps.entitlements import require_full_access
 from app.api.endpoints.helpers import (
     normalize_required_text,
     require_recent_authentication,
@@ -23,7 +24,7 @@ def sync_user(user_claims: dict = Depends(get_current_user)) -> dict:
         'internal_user': internal_user,
     }
 
-@router.get('/profile')
+@router.get('/profile', dependencies=[Depends(require_full_access)])
 def get_profile(
     db: Session = Depends(get_db),
     user_claims: dict = Depends(get_current_user),
@@ -44,7 +45,7 @@ def get_profile(
     db.commit()
     return payload
 
-@router.get('/recommendations')
+@router.get('/recommendations', dependencies=[Depends(require_full_access)])
 def get_recommendations(
     db: Session = Depends(get_db),
     user_claims: dict = Depends(get_current_user),
@@ -54,7 +55,7 @@ def get_recommendations(
     db.commit()
     return payload
 
-@router.post('/avatar/select')
+@router.post('/avatar/select', dependencies=[Depends(require_full_access)])
 def select_avatar(
     payload: dict,
     db: Session = Depends(get_db),

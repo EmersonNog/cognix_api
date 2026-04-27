@@ -22,6 +22,9 @@ class MultiplayerWebSocketTests(unittest.TestCase):
     def setUp(self) -> None:
         self.app = FastAPI()
         self.app.include_router(multiplayer_routes.router, prefix='/multiplayer')
+        self.app.dependency_overrides[multiplayer_routes.require_full_access] = (
+            lambda: {'hasFullAccess': True}
+        )
         self.client = TestClient(self.app)
 
         self._original_authenticate = multiplayer_websocket.authenticate_websocket

@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.api.deps.entitlements import require_full_access
 from app.api.endpoints.helpers import require_user_context
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
@@ -15,7 +16,7 @@ from app.db.models import get_question_reports_table, get_questions_table
 from app.db.session import engine
 from app.services.question_reports import parse_question_report_payload
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_full_access)])
 
 SENSITIVE_FIELDS = {'gabarito'}
 

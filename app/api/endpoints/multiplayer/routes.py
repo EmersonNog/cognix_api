@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, WebSocket
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.api.deps.entitlements import require_full_access
 from app.api.endpoints.helpers import require_user_context
 from app.db.session import SessionLocal
 from app.services.multiplayer import (
@@ -47,7 +48,7 @@ _payload_with_display_name = multiplayer_auth.payload_with_display_name
 _track_host_http_activity = multiplayer_host_timeout.track_host_http_activity
 
 
-@router.post('/rooms')
+@router.post('/rooms', dependencies=[Depends(require_full_access)])
 async def create_multiplayer_room(
     payload: dict | None = None,
     db: Session = Depends(get_db),
@@ -75,7 +76,7 @@ async def create_multiplayer_room(
     return room
 
 
-@router.post('/rooms/join')
+@router.post('/rooms/join', dependencies=[Depends(require_full_access)])
 async def join_multiplayer_room(
     payload: dict,
     db: Session = Depends(get_db),
@@ -104,7 +105,7 @@ async def join_multiplayer_room(
     return room
 
 
-@router.get('/rooms/pin/{pin}')
+@router.get('/rooms/pin/{pin}', dependencies=[Depends(require_full_access)])
 def get_multiplayer_room_by_pin(
     pin: str,
     db: Session = Depends(get_db),
@@ -113,7 +114,7 @@ def get_multiplayer_room_by_pin(
     return get_room_by_pin(db, normalize_pin(pin))
 
 
-@router.get('/rooms/{room_id}')
+@router.get('/rooms/{room_id}', dependencies=[Depends(require_full_access)])
 async def get_multiplayer_room(
     room_id: int,
     db: Session = Depends(get_db),
@@ -124,7 +125,10 @@ async def get_multiplayer_room(
     return room
 
 
-@router.delete('/rooms/{room_id}/participants/{participant_id}')
+@router.delete(
+    '/rooms/{room_id}/participants/{participant_id}',
+    dependencies=[Depends(require_full_access)],
+)
 async def remove_multiplayer_participant(
     room_id: int,
     participant_id: int,
@@ -147,7 +151,7 @@ async def remove_multiplayer_participant(
     return room
 
 
-@router.post('/rooms/{room_id}/leave')
+@router.post('/rooms/{room_id}/leave', dependencies=[Depends(require_full_access)])
 async def leave_multiplayer_room(
     room_id: int,
     db: Session = Depends(get_db),
@@ -173,7 +177,7 @@ async def leave_multiplayer_room(
     return payload
 
 
-@router.post('/rooms/{room_id}/start')
+@router.post('/rooms/{room_id}/start', dependencies=[Depends(require_full_access)])
 async def start_multiplayer_room(
     room_id: int,
     db: Session = Depends(get_db),
@@ -190,7 +194,7 @@ async def start_multiplayer_room(
     return room
 
 
-@router.post('/rooms/{room_id}/answers')
+@router.post('/rooms/{room_id}/answers', dependencies=[Depends(require_full_access)])
 async def submit_multiplayer_answer(
     room_id: int,
     payload: dict,

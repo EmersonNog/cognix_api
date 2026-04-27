@@ -4,6 +4,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.api.deps.entitlements import require_full_access
 from app.api.endpoints.helpers import normalize_required_text, require_user_context
 from app.core.config import settings
 from app.core.datetime_utils import utc_now
@@ -15,7 +16,7 @@ from app.db.models import (
 from app.db.session import engine
 from app.services.economy import sync_attempt_reward
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_full_access)])
 
 
 def _parse_attempt_payload(payload: dict) -> tuple[object, str, str | None, str | None]:

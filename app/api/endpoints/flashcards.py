@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.api.deps.entitlements import require_full_access
 from app.api.endpoints.helpers import require_user_context
 from app.services.flashcards import (
     create_flashcard,
@@ -12,7 +13,7 @@ from app.services.flashcards import (
     save_flashcard_deck_progress,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_full_access)])
 
 
 class CreateFlashcardRequest(BaseModel):

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.api.deps.entitlements import require_full_access
 from app.api.endpoints.helpers import require_user_context
 from app.services.study_plan import (
     fetch_study_plan,
@@ -9,7 +10,7 @@ from app.services.study_plan import (
     save_study_plan,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_full_access)])
 
 @router.get('')
 def get_user_study_plan(

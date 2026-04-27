@@ -121,7 +121,7 @@ class AbacatePayPlansTests(unittest.TestCase):
             get_plan_config('vitalicio')
 
         self.assertEqual(exc_info.exception.status_code, 400)
-        self.assertEqual(exc_info.exception.detail, 'Plano invalido.')
+        self.assertEqual(exc_info.exception.detail, 'Plano inválido.')
 
     def test_get_plan_config_requires_configured_product(self) -> None:
         with patch.object(settings, 'abacatepay_product_id_mensal', None):

@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.api.deps.entitlements import require_full_access
 from app.core.config import settings
 from app.core.datetime_utils import ensure_utc, utc_now
 from app.db.models import (
@@ -35,7 +36,7 @@ from app.services.summaries import (
 
 from .helpers import has_summary_nodes, load_base_summary
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_full_access)])
 logger = logging.getLogger(__name__)
 
 

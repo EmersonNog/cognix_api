@@ -4,6 +4,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.api.deps.entitlements import require_full_access
 from app.api.endpoints.helpers import normalize_required_text, require_user_context
 from app.core.config import settings
 from app.core.datetime_utils import ensure_utc, to_api_iso, utc_now
@@ -24,7 +25,7 @@ from .helpers import (
     resolve_session_state_version,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_full_access)])
 
 
 @router.post('')
