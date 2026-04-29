@@ -11,6 +11,7 @@ from .tables import (
     get_coupon_redemptions_table,
     get_flashcard_deck_states_table,
     get_flashcards_table,
+    get_google_play_subscriptions_table,
     get_multiplayer_participants_table,
     get_multiplayer_rooms_table,
     get_payment_subscriptions_table,
@@ -72,6 +73,7 @@ def create_internal_tables(
     writing_submission_versions_table_name: str,
     coupon_redemptions_table_name: str,
     payment_subscriptions_table_name: str,
+    google_play_subscriptions_table_name: str,
     user_access_grants_table_name: str,
 ) -> None:
     table_specs = [
@@ -98,6 +100,10 @@ def create_internal_tables(
         ),
         (coupon_redemptions_table_name, get_coupon_redemptions_table),
         (payment_subscriptions_table_name, get_payment_subscriptions_table),
+        (
+            google_play_subscriptions_table_name,
+            get_google_play_subscriptions_table,
+        ),
         (user_access_grants_table_name, get_user_access_grants_table),
     ]
 
@@ -119,5 +125,6 @@ def create_internal_tables(
             summaries_table_name,
             user_summaries_table_name,
             payment_subscriptions_table_name,
+            google_play_subscriptions_table_name,
             user_access_grants_table_name,
         )

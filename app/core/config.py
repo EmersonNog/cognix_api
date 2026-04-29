@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     coupon_redemptions_table: str = 'coupon_redemptions'
     payment_subscriptions_table: str = 'payment_subscriptions'
     user_access_grants_table: str = 'user_access_grants'
-    cognix_trial_days: int = 3
+    google_play_subscriptions_table: str = 'google_play_subscriptions'
     allowed_origins: list[str] = ['*']
     firebase_credentials: str | None = None
     firebase_clock_skew_seconds: int = 5
@@ -46,5 +46,10 @@ class Settings(BaseSettings):
     abacatepay_coupon_mensal_first_month: str | None = None
     abacatepay_hash_secret: str | None = None
     abacatepay_webhook_secret: str | None = None
+    google_play_package_name: str = 'com.cognixhub.app'
+    google_play_product_id_monthly: str = 'cognix_premium_monthly'
+    google_play_product_id_annual: str = 'cognix_premium_annual'
+    google_play_service_account_credentials: str | None = None
+    cognix_trial_days: int = 3
 
 settings = Settings()

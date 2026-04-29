@@ -48,6 +48,7 @@ def _create_internal_tables() -> None:
         settings.writing_submission_versions_table,
         settings.coupon_redemptions_table,
         settings.payment_subscriptions_table,
+        settings.google_play_subscriptions_table,
         settings.user_access_grants_table,
     )
 

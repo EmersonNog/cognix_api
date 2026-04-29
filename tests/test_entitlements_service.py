@@ -25,6 +25,11 @@ class EntitlementsStatusTests(unittest.TestCase):
                 'app.services.entitlements.status.current.find_user_grant',
                 return_value=None,
             ),
+            patch(
+                'app.services.entitlements.status.current.'
+                'has_used_monthly_intro_offer',
+                return_value=False,
+            ),
         ):
             result = get_current_access_status(
                 db,
@@ -36,7 +41,41 @@ class EntitlementsStatusTests(unittest.TestCase):
         self.assertEqual(result['accessStatus'], 'trial_available')
         self.assertFalse(result['hasFullAccess'])
         self.assertTrue(result['trialAvailable'])
+        self.assertTrue(result['eligibleForMonthlyIntroOffer'])
         self.assertEqual(result['features'], [])
+
+    def test_current_access_status_blocks_monthly_intro_when_offer_was_used(self) -> None:
+        db = Mock()
+
+        with (
+            patch(
+                'app.services.entitlements.status.current.get_current_subscription_status',
+                return_value={
+                    'status': 'none',
+                    'canCancel': False,
+                    'hasAccess': False,
+                    'accessEndsAt': None,
+                    'willCancelAtPeriodEnd': False,
+                },
+            ),
+            patch(
+                'app.services.entitlements.status.current.find_user_grant',
+                return_value=None,
+            ),
+            patch(
+                'app.services.entitlements.status.current.'
+                'has_used_monthly_intro_offer',
+                return_value=True,
+            ),
+        ):
+            result = get_current_access_status(
+                db,
+                user_id=7,
+                firebase_uid='firebase-7',
+                email='aluno@example.com',
+            )
+
+        self.assertFalse(result['eligibleForMonthlyIntroOffer'])
 
     def test_current_access_status_uses_active_trial(self) -> None:
         db = Mock()
@@ -64,6 +103,11 @@ class EntitlementsStatusTests(unittest.TestCase):
                     'starts_at': starts_at,
                     'ends_at': ends_at,
                 },
+            ),
+            patch(
+                'app.services.entitlements.status.current.'
+                'has_used_monthly_intro_offer',
+                return_value=False,
             ),
         ):
             result = get_current_access_status(
@@ -107,6 +151,11 @@ class EntitlementsStatusTests(unittest.TestCase):
             patch(
                 'app.services.entitlements.status.current.mark_user_grant_expired',
             ) as mark_expired_mock,
+            patch(
+                'app.services.entitlements.status.current.'
+                'has_used_monthly_intro_offer',
+                return_value=False,
+            ),
         ):
             result = get_current_access_status(
                 db,
