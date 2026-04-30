@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from fastapi import HTTPException
 
 from ..shared.plans import VALID_PLAN_IDS
+from .attribution import normalize_attribution
 
 @dataclass(frozen=True)
 class CheckoutInput:
@@ -14,6 +15,7 @@ class CheckoutInput:
     email: str
     tax_id: str
     coupon_code: str
+    attribution: dict[str, str] = field(default_factory=dict)
 
 def normalize_coupon(value: str | None) -> str:
     return re.sub(r'[^A-Z0-9_-]', '', (value or '').upper())[:30]
@@ -25,6 +27,7 @@ def normalize_checkout_input(
     email: str,
     tax_id: str,
     coupon_code: str | None,
+    attribution: object | None = None,
 ) -> CheckoutInput:
     return CheckoutInput(
         plan_id=plan_id.strip(),
@@ -32,6 +35,7 @@ def normalize_checkout_input(
         email=email.strip().lower(),
         tax_id=re.sub(r'\D+', '', tax_id),
         coupon_code=normalize_coupon(coupon_code),
+        attribution=normalize_attribution(attribution),
     )
 
 

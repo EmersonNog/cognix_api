@@ -1,4 +1,5 @@
 import unittest
+import json
 from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
@@ -163,6 +164,49 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
             create_subscription_mock.call_args.kwargs['allowed_coupon_code'],
         )
 
+    def test_checkout_records_sanitized_attribution(self) -> None:
+        db = Mock()
+
+        with (
+            patch.object(settings, 'abacatepay_product_id_mensal', 'prod_mensal'),
+            patch.object(settings, 'abacatepay_hash_secret', 'test-secret'),
+            patch(
+                'app.services.payments.abacatepay.checkout.subscriptions.create_customer',
+                return_value='cust_123',
+            ),
+            patch(
+                'app.services.payments.abacatepay.checkout.subscriptions.create_subscription',
+                return_value=('https://app.abacatepay.com/pay/bill_123', 'bill_123'),
+            ),
+            patch(
+                'app.services.payments.abacatepay.checkout.subscriptions.'
+                'record_subscription_checkout_created',
+            ) as record_mock,
+        ):
+            create_subscription_checkout(
+                db,
+                plan_id='mensal',
+                name='Aluno Teste',
+                email='aluno@example.com',
+                tax_id='529.982.247-25',
+                coupon_code=None,
+                attribution={
+                    'utm_source': ' meta ',
+                    'utm_campaign': 'lancamento\x00abril',
+                    'not_allowed': 'ignore-me',
+                    'fbclid': 123,
+                },
+            )
+
+        attribution = json.loads(record_mock.call_args.kwargs['attribution_json'])
+        self.assertEqual(
+            attribution,
+            {
+                'utm_campaign': 'lancamentoabril',
+                'utm_source': 'meta',
+            },
+        )
+
     def test_abacatepay_payload_includes_allowed_coupon(self) -> None:
         checkout = CheckoutInput(
             plan_id='mensal',
@@ -239,7 +283,8 @@ class AbacatePaySubscriptionCheckoutTests(unittest.TestCase):
             },
         }
 
-        result = handle_abacatepay_webhook(db, payload)
+        with patch.object(settings, 'utmify_api_token', None):
+            result = handle_abacatepay_webhook(db, payload)
 
         self.assertEqual(result, {'status': 'ok'})
         self.assertEqual(db.execute.call_count, 3)

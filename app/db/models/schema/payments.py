@@ -7,12 +7,19 @@ def ensure_payment_subscriptions_schema(
     engine,
     payment_subscriptions_table_name: str,
 ) -> None:
-    _ensure_column_exists(
-        engine,
-        payment_subscriptions_table_name,
-        column_name='current_period_ends_at',
-        column_spec='TIMESTAMPTZ',
-    )
+    for column_name, column_spec in (
+        ('current_period_ends_at', 'TIMESTAMPTZ'),
+        ('attribution_json', 'TEXT'),
+        ('utmify_status', 'VARCHAR(64)'),
+        ('utmify_sent_at', 'TIMESTAMPTZ'),
+        ('utmify_last_error', 'TEXT'),
+    ):
+        _ensure_column_exists(
+            engine,
+            payment_subscriptions_table_name,
+            column_name=column_name,
+            column_spec=column_spec,
+        )
 
 
 def ensure_google_play_subscriptions_schema(

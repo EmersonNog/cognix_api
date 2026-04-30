@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from .attribution import attribution_to_json
 from .inputs import normalize_checkout_input, validate_checkout_input
 from ..coupons.redemptions import ensure_coupon_not_redeemed
 from .preparation import prepare_checkout_subscription
@@ -17,7 +18,8 @@ def create_subscription_checkout(
     name: str,
     email: str,
     tax_id: str,
-    coupon_code: str | None,
+    attribution: object | None = None,
+    coupon_code: str | None = None,
 ) -> str:
     checkout = normalize_checkout_input(
         plan_id=plan_id,
@@ -25,6 +27,7 @@ def create_subscription_checkout(
         email=email,
         tax_id=tax_id,
         coupon_code=coupon_code,
+        attribution=attribution,
     )
     validate_checkout_input(checkout)
 
@@ -58,6 +61,7 @@ def create_subscription_checkout(
             external_id=prepared.external_id,
             checkout_id=str(checkout_id) if checkout_id else None,
             checkout_url=checkout_url,
+            attribution_json=attribution_to_json(checkout.attribution),
         )
 
         db.commit()

@@ -5,6 +5,7 @@ from typing import Any
 from app.core.config import settings
 
 from ..checkout.inputs import CheckoutInput
+from ..checkout.attribution import attribution_metadata
 from ..shared.plans import PlanConfig
 
 CHECKOUT_SOURCE = 'cognix_api'
@@ -46,7 +47,7 @@ def subscription_payload(
 
 
 def checkout_metadata(checkout: CheckoutInput, tax_id_hash: str) -> dict[str, str]:
-    return {
+    metadata = {
         'source': CHECKOUT_SOURCE,
         'planId': checkout.plan_id,
         'submittedName': checkout.name,
@@ -54,3 +55,7 @@ def checkout_metadata(checkout: CheckoutInput, tax_id_hash: str) -> dict[str, st
         'submittedTaxIdHash': tax_id_hash,
         'submittedCouponCode': checkout.coupon_code,
     }
+
+    metadata.update(attribution_metadata(checkout.attribution))
+
+    return metadata

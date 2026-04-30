@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.services.payments.utmify import sync_subscription_paid_order_with_utmify
+
 from ..coupons.redemptions import record_coupon_redeemed
 from ..shared.external_ids import parse_coupon_context
 from ..shared.plans import get_plan_config
@@ -26,6 +28,7 @@ def handle_subscription_cancelled(
 def handle_subscription_completed(
     db: Session,
     context: WebhookContext,
+    webhook_payload: dict | None = None,
 ) -> dict[str, str]:
     mark_subscription_active(
         db,
@@ -36,10 +39,20 @@ def handle_subscription_completed(
         current_period_ends_at=context.current_period_ends_at,
     )
 
+    _record_coupon_redemption_if_present(db, context)
+    db.commit()
+    _sync_utmify_after_commit(db, context, webhook_payload)
+
+    return {'status': 'ok'}
+
+
+def _record_coupon_redemption_if_present(
+    db: Session,
+    context: WebhookContext,
+) -> None:
     coupon_context = parse_coupon_context(context.external_id)
     if not coupon_context:
-        db.commit()
-        return {'status': 'ok'}
+        return
 
     plan = get_plan_config(coupon_context['plan_id'])
     record_coupon_redeemed(
@@ -53,6 +66,18 @@ def handle_subscription_completed(
         checkout_id=context.checkout_id,
         checkout_url=context.checkout_url,
     )
-    db.commit()
 
-    return {'status': 'ok'}
+
+def _sync_utmify_after_commit(
+    db: Session,
+    context: WebhookContext,
+    webhook_payload: dict | None,
+) -> None:
+    if webhook_payload is None:
+        return
+
+    sync_subscription_paid_order_with_utmify(
+        db,
+        external_id=context.external_id,
+        webhook_payload=webhook_payload,
+    )

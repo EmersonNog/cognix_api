@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import desc, insert, or_, select, update
+from sqlalchemy import Table, desc, insert, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -25,8 +25,9 @@ def record_subscription_checkout_created(
     external_id: str,
     checkout_id: str | None,
     checkout_url: str | None,
+    attribution_json: str | None = None,
 ) -> None:
-    table = get_payment_subscriptions_table(settings.payment_subscriptions_table)
+    table = _payment_subscriptions_table()
     now = utc_now()
 
     db.execute(
@@ -39,6 +40,7 @@ def record_subscription_checkout_created(
             external_id=external_id,
             checkout_id=checkout_id,
             checkout_url=checkout_url,
+            attribution_json=attribution_json,
             status='checkout_created',
             created_at=now,
             updated_at=now,
@@ -55,7 +57,7 @@ def mark_subscription_active(
     checkout_url: str | None,
     current_period_ends_at: datetime | None,
 ) -> None:
-    table = get_payment_subscriptions_table(settings.payment_subscriptions_table)
+    table = _payment_subscriptions_table()
     values = {
         'status': 'active',
         'cancel_requested_at': None,
@@ -81,7 +83,7 @@ def mark_subscription_cancelled(
     subscription_id: int,
     current_period_ends_at: datetime | None = None,
 ) -> None:
-    table = get_payment_subscriptions_table(settings.payment_subscriptions_table)
+    table = _payment_subscriptions_table()
     now = utc_now()
     values = {
         'status': 'cancelled',
@@ -102,7 +104,7 @@ def mark_subscription_cancelled_by_external_id(
     external_id: str,
     external_subscription_id: str | None,
 ) -> None:
-    table = get_payment_subscriptions_table(settings.payment_subscriptions_table)
+    table = _payment_subscriptions_table()
     now = utc_now()
     values = {
         'status': 'cancelled',
@@ -116,6 +118,36 @@ def mark_subscription_cancelled_by_external_id(
     db.execute(update(table).where(table.c.external_id == external_id).values(**values))
 
 
+def find_subscription_by_external_id(db: Session, external_id: str) -> dict | None:
+    table = _payment_subscriptions_table()
+    row = db.execute(
+        select(table).where(table.c.external_id == external_id).limit(1)
+    ).mappings().first()
+
+    return _row_to_dict(row)
+
+
+def mark_subscription_utmify_result(
+    db: Session,
+    *,
+    external_id: str,
+    status: str,
+    error: str | None = None,
+) -> None:
+    table = _payment_subscriptions_table()
+    now = utc_now()
+    values = {
+        'utmify_status': status,
+        'utmify_last_error': error[:1000] if error else None,
+        'updated_at': now,
+    }
+
+    if status == 'sent':
+        values['utmify_sent_at'] = now
+
+    db.execute(update(table).where(table.c.external_id == external_id).values(**values))
+
+
 def find_current_subscription_for_user(
     db: Session,
     *,
@@ -123,18 +155,18 @@ def find_current_subscription_for_user(
     firebase_uid: str | None,
     email_hash: str | None,
 ) -> dict | None:
-    table = get_payment_subscriptions_table(settings.payment_subscriptions_table)
-    filters = [table.c.user_id == user_id]
-
-    if firebase_uid:
-        filters.append(table.c.firebase_uid == firebase_uid)
-    if email_hash:
-        filters.append(table.c.email_hash == email_hash)
-
+    table = _payment_subscriptions_table()
     row = db.execute(
         select(table)
         .where(
-            or_(*filters),
+            or_(
+                *_user_identity_filters(
+                    table,
+                    user_id=user_id,
+                    firebase_uid=firebase_uid,
+                    email_hash=email_hash,
+                )
+            ),
             table.c.status.in_(ACTIVE_STATUSES | {'cancelled'}),
         )
         .order_by(
@@ -145,7 +177,7 @@ def find_current_subscription_for_user(
         .limit(1)
     ).mappings().first()
 
-    return dict(row) if row else None
+    return _row_to_dict(row)
 
 
 def find_cancelable_subscription_for_user(
@@ -155,25 +187,25 @@ def find_cancelable_subscription_for_user(
     firebase_uid: str | None,
     email_hash: str | None,
 ) -> dict | None:
-    table = get_payment_subscriptions_table(settings.payment_subscriptions_table)
-    filters = [table.c.user_id == user_id]
-
-    if firebase_uid:
-        filters.append(table.c.firebase_uid == firebase_uid)
-    if email_hash:
-        filters.append(table.c.email_hash == email_hash)
-
+    table = _payment_subscriptions_table()
     row = db.execute(
         select(table)
         .where(
-            or_(*filters),
+            or_(
+                *_user_identity_filters(
+                    table,
+                    user_id=user_id,
+                    firebase_uid=firebase_uid,
+                    email_hash=email_hash,
+                )
+            ),
             table.c.status.in_(CANCELABLE_STATUSES),
         )
         .order_by(desc(table.c.updated_at), desc(table.c.id))
         .limit(1)
     ).mappings().first()
 
-    return dict(row) if row else None
+    return _row_to_dict(row)
 
 
 def link_subscription_to_user(
@@ -183,7 +215,7 @@ def link_subscription_to_user(
     user_id: int,
     firebase_uid: str | None,
 ) -> None:
-    table = get_payment_subscriptions_table(settings.payment_subscriptions_table)
+    table = _payment_subscriptions_table()
     values = {
         'user_id': user_id,
         'updated_at': utc_now(),
@@ -193,3 +225,28 @@ def link_subscription_to_user(
         values['firebase_uid'] = firebase_uid
 
     db.execute(update(table).where(table.c.id == subscription_id).values(**values))
+
+
+def _payment_subscriptions_table() -> Table:
+    return get_payment_subscriptions_table(settings.payment_subscriptions_table)
+
+
+def _user_identity_filters(
+    table: Table,
+    *,
+    user_id: int,
+    firebase_uid: str | None,
+    email_hash: str | None,
+) -> list:
+    filters = [table.c.user_id == user_id]
+
+    if firebase_uid:
+        filters.append(table.c.firebase_uid == firebase_uid)
+    if email_hash:
+        filters.append(table.c.email_hash == email_hash)
+
+    return filters
+
+
+def _row_to_dict(row) -> dict | None:
+    return dict(row) if row else None

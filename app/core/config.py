@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     abacatepay_coupon_mensal_first_month: str | None = None
     abacatepay_hash_secret: str | None = None
     abacatepay_webhook_secret: str | None = None
+    abacatepay_webhook_signature_key: str | None = None
+    utmify_api_token: str | None = None
+    utmify_orders_url: str = 'https://api.utmify.com.br/api-credentials/orders'
+    utmify_platform: str = 'Cognix'
+    utmify_is_test: bool = False
     google_play_package_name: str = 'com.cognixhub.app'
     google_play_product_id_monthly: str = 'cognix_premium_monthly'
     google_play_product_id_annual: str = 'cognix_premium_annual'

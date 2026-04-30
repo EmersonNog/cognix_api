@@ -22,4 +22,4 @@ def handle_abacatepay_webhook(db: Session, payload: dict) -> dict[str, str]:
     if event == 'subscription.cancelled':
         return handle_subscription_cancelled(db, context)
 
-    return handle_subscription_completed(db, context)
+    return handle_subscription_completed(db, context, payload)
