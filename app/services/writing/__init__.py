@@ -1,3 +1,4 @@
+from .image_scan import scan_writing_image
 from .service import analyze_writing, gemini_available
 from .submissions import (
     count_writing_submissions,
@@ -21,4 +22,5 @@ __all__ = [
     'list_writing_categories',
     'list_writing_submissions',
     'list_writing_themes',
+    'scan_writing_image',
 ]

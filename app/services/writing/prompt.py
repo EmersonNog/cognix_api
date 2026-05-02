@@ -35,6 +35,27 @@ def build_writing_prompt(payload: dict, user_id: int) -> str:
     )
 
 
+def build_writing_image_scan_prompt(user_id: int) -> str:
+    return (
+        'Você é um transcritor de redações manuscritas em português do Brasil '
+        'dentro do app Cognix. Extraia o texto da imagem com foco em fidelidade '
+        'ao que o aluno escreveu.\n\n'
+        'Regras:\n'
+        '- Retorne somente JSON no formato solicitado.\n'
+        '- Transcreva apenas o texto da redação; ignore linhas da folha, margens, '
+        'rasuras sem conteúdo e elementos decorativos.\n'
+        '- Preserve parágrafos com quebras de linha em branco.\n'
+        '- Corrija acentos e palavras óbvias quando o contexto deixar claro, mas '
+        'não reescreva a redação nem melhore estilo, argumentos ou gramática.\n'
+        '- Se uma palavra estiver ilegível, use [ilegível] no lugar dela.\n'
+        '- Não invente frases para completar lacunas.\n'
+        '- confidence deve ir de 0 a 1, representando sua confiança na leitura.\n'
+        '- warnings deve listar problemas como imagem tremida, corte, baixa luz, '
+        'caligrafia difícil ou trechos ilegíveis.\n\n'
+        f'Usuário interno: {user_id}\n'
+    )
+
+
 def _as_dict(value: object) -> dict:
     return value if isinstance(value, dict) else {}
 

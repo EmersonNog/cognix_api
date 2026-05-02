@@ -13,6 +13,7 @@ from app.services.writing import (
     list_writing_categories,
     list_writing_submissions,
     list_writing_themes,
+    scan_writing_image,
 )
 
 router = APIRouter(dependencies=[Depends(require_full_access)])
@@ -110,3 +111,12 @@ def analyze_user_writing(
     )
     db.commit()
     return result
+
+
+@router.post('/scan-image')
+def scan_user_writing_image(
+    payload: dict[str, object],
+    user_claims: dict = Depends(get_current_user),
+) -> dict[str, object]:
+    user_id, _firebase_uid = require_user_context(user_claims)
+    return scan_writing_image(dict(payload), user_id=user_id)

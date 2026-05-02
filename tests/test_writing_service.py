@@ -1,10 +1,34 @@
 import unittest
+from base64 import b64encode
+from unittest.mock import patch
 
+from fastapi import HTTPException
+
+from app.core.config import settings
+from app.services.writing.image_scan import scan_writing_image
 from app.services.writing.normalize import normalize_writing_feedback
 from app.services.writing.prompt import build_writing_prompt
+from app.services.writing.schemas import (
+    build_writing_feedback_schema,
+    build_writing_image_scan_schema,
+)
 
 
 class WritingServiceTests(unittest.TestCase):
+    def test_gemini_response_schemas_are_top_level_objects(self) -> None:
+        feedback_schema = build_writing_feedback_schema()
+        image_scan_schema = build_writing_image_scan_schema()
+
+        self.assertIsInstance(feedback_schema, dict)
+        self.assertEqual(feedback_schema.get('type'), 'object')
+        self.assertIn('estimated_score', feedback_schema.get('properties', {}))
+        self.assertIn('rewrite_suggestions', feedback_schema.get('properties', {}))
+
+        self.assertIsInstance(image_scan_schema, dict)
+        self.assertEqual(image_scan_schema.get('type'), 'object')
+        self.assertIn('text', image_scan_schema.get('properties', {}))
+        self.assertIn('confidence', image_scan_schema.get('properties', {}))
+
     def test_writing_prompt_penalizes_theme_mismatch(self) -> None:
         prompt = build_writing_prompt(
             {
@@ -20,9 +44,9 @@ class WritingServiceTests(unittest.TestCase):
             user_id=7,
         )
 
-        self.assertIn('Aderencia ao tema e criterio central', prompt)
+        self.assertIn('Aderência ao tema é critério central', prompt)
         self.assertIn('fuga ao tema', prompt)
-        self.assertIn('estimated_score deve ser no maximo 320', prompt)
+        self.assertIn('estimated_score deve ser no máximo 320', prompt)
         self.assertIn('tangenciar o tema', prompt)
         self.assertIn('Tema: Desafios da mobilidade urbana no Brasil', prompt)
 
@@ -75,6 +99,53 @@ class WritingServiceTests(unittest.TestCase):
         self.assertEqual(result['checklist'], [])
         self.assertEqual(result['competencies'], [])
         self.assertEqual(result['rewrite_suggestions'], [])
+
+    def test_scan_writing_image_uses_gemini_image_payload(self) -> None:
+        original_key = settings.gemini_api_key
+        settings.gemini_api_key = 'test-key'
+        try:
+            with patch(
+                'app.services.writing.image_scan._generate_image_scan_with_gemini',
+                return_value={
+                    'text': 'Texto transcrito',
+                    'confidence': 0.82,
+                    'warnings': ['foto escura'],
+                },
+            ) as gemini:
+                result = scan_writing_image(
+                    {
+                        'image_base64': b64encode(b'image-bytes').decode('ascii'),
+                        'mime_type': 'image/jpeg',
+                    },
+                    user_id=7,
+                )
+
+            self.assertEqual(result['text'], 'Texto transcrito')
+            self.assertEqual(result['confidence'], 0.82)
+            self.assertEqual(result['warnings'], ['foto escura'])
+            _, kwargs = gemini.call_args
+            self.assertEqual(kwargs['image_bytes'], b'image-bytes')
+            self.assertEqual(kwargs['mime_type'], 'image/jpeg') 
+            self.assertIn('Usuário interno: 7', kwargs['prompt'])
+        finally:
+            settings.gemini_api_key = original_key
+
+    def test_scan_writing_image_rejects_invalid_mime_type(self) -> None:
+        original_key = settings.gemini_api_key
+        settings.gemini_api_key = 'test-key'
+        try:
+            with self.assertRaises(HTTPException) as error:
+                scan_writing_image(
+                    {
+                        'image_base64': b64encode(b'image-bytes').decode('ascii'),
+                        'mime_type': 'text/plain',
+                    },
+                    user_id=7,
+                )
+
+            self.assertEqual(error.exception.status_code, 422)
+        finally:
+            settings.gemini_api_key = original_key
 
 
 if __name__ == '__main__':

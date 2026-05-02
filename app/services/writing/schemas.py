@@ -49,3 +49,16 @@ def build_writing_feedback_schema() -> dict:
         ],
         'additionalProperties': False,
     }
+
+
+def build_writing_image_scan_schema() -> dict:
+    return {
+        'type': 'object',
+        'properties': {
+            'text': {'type': 'string'},
+            'confidence': {'type': 'number'},
+            'warnings': {'type': 'array', 'items': {'type': 'string'}},
+        },
+        'required': ['text', 'confidence', 'warnings'],
+        'additionalProperties': False,
+    }
