@@ -37,7 +37,7 @@ class GooglePlaySubscriptionStatusTests(unittest.TestCase):
                     'expiryTime': expiry,
                     'offerDetails': {
                         'basePlanId': 'monthly',
-                        'offerId': 'first-month-990',
+                        'offerId': 'app-first-month-990',
                     },
                     'autoRenewingPlan': {'autoRenewEnabled': True},
                 },
@@ -52,7 +52,7 @@ class GooglePlaySubscriptionStatusTests(unittest.TestCase):
         self.assertEqual(snapshot.status, 'active')
         self.assertTrue(snapshot.has_access)
         self.assertEqual(snapshot.base_plan_id, 'monthly')
-        self.assertEqual(snapshot.offer_id, 'first-month-990')
+        self.assertEqual(snapshot.offer_id, 'app-first-month-990')
         self.assertTrue(snapshot.auto_renewing)
         self.assertEqual(
             snapshot.current_period_ends_at,

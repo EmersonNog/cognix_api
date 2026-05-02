@@ -157,7 +157,7 @@ class UtmifyPayloadTests(unittest.TestCase):
         self.assertEqual(payload['orderId'], subscription['external_id'])
         self.assertEqual(payload['status'], 'paid')
         self.assertEqual(payload['paymentMethod'], 'credit_card')
-        self.assertEqual(payload['products'][0]['priceInCents'], 990)
+        self.assertEqual(payload['products'][0]['priceInCents'], 1990)
         self.assertEqual(payload['trackingParameters']['utm_source'], 'meta')
         self.assertEqual(payload['trackingParameters']['src'], 'criativo-1')
         self.assertEqual(payload['customer']['email'], 'aluno@example.com')

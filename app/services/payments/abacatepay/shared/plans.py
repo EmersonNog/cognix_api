@@ -34,14 +34,14 @@ class PlanDefinition:
 _PLAN_DEFINITIONS = {
     PLAN_ID_MENSAL: PlanDefinition(
         name='Plano mensal',
-        price_cents=1990,
+        price_cents=2990,
         product_id=lambda: settings.abacatepay_product_id_mensal,
         coupon_code=lambda: settings.abacatepay_coupon_mensal_first_month,
-        coupon_price_cents=990,
+        coupon_price_cents=1990,
     ),
     PLAN_ID_ANUAL: PlanDefinition(
         name='Plano anual',
-        price_cents=19990,
+        price_cents=29900,
         product_id=lambda: settings.abacatepay_product_id_anual,
     ),
 }

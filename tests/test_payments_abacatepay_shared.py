@@ -112,9 +112,9 @@ class AbacatePayPlansTests(unittest.TestCase):
 
         self.assertEqual(plan.product_id, 'prod_mensal')
         self.assertEqual(plan.name, 'Plano mensal')
-        self.assertEqual(plan.price_cents, 1990)
+        self.assertEqual(plan.price_cents, 2990)
         self.assertEqual(plan.coupon_code, 'COGNIX10')
-        self.assertEqual(plan.coupon_price_cents, 990)
+        self.assertEqual(plan.coupon_price_cents, 1990)
 
     def test_get_plan_config_returns_annual_plan(self) -> None:
         with patch.object(settings, 'abacatepay_product_id_anual', 'prod_anual'):
@@ -122,24 +122,24 @@ class AbacatePayPlansTests(unittest.TestCase):
 
         self.assertEqual(plan.product_id, 'prod_anual')
         self.assertEqual(plan.name, 'Plano anual')
-        self.assertEqual(plan.price_cents, 19990)
+        self.assertEqual(plan.price_cents, 29900)
         self.assertIsNone(plan.coupon_code)
         self.assertIsNone(plan.coupon_price_cents)
 
     def test_resolve_checkout_price_cents_uses_coupon_price_when_available(self) -> None:
         plan = PlanConfig(
             product_id='prod_mensal',
-            price_cents=1990,
-            coupon_price_cents=990,
+            price_cents=2990,
+            coupon_price_cents=1990,
         )
 
         self.assertEqual(
             resolve_checkout_price_cents(plan, coupon_applied=True),
-            990,
+            1990,
         )
         self.assertEqual(
             resolve_checkout_price_cents(plan, coupon_applied=False),
-            1990,
+            2990,
         )
 
     def test_get_plan_config_rejects_invalid_plan(self) -> None:
