@@ -1,9 +1,31 @@
 import unittest
 
 from app.services.writing.normalize import normalize_writing_feedback
+from app.services.writing.prompt import build_writing_prompt
 
 
 class WritingServiceTests(unittest.TestCase):
+    def test_writing_prompt_penalizes_theme_mismatch(self) -> None:
+        prompt = build_writing_prompt(
+            {
+                'theme': {
+                    'id': 'mobilidade-urbana',
+                    'title': 'Desafios da mobilidade urbana no Brasil',
+                    'category': 'Cidadania',
+                    'description': 'Discuta transporte publico e acessibilidade.',
+                    'keywords': ['transporte', 'acessibilidade'],
+                },
+                'final_text': 'Texto sobre outro tema.',
+            },
+            user_id=7,
+        )
+
+        self.assertIn('Aderencia ao tema e criterio central', prompt)
+        self.assertIn('fuga ao tema', prompt)
+        self.assertIn('estimated_score deve ser no maximo 320', prompt)
+        self.assertIn('tangenciar o tema', prompt)
+        self.assertIn('Tema: Desafios da mobilidade urbana no Brasil', prompt)
+
     def test_normalize_writing_feedback_clamps_scores_and_limits_lists(self) -> None:
         payload = {
             'estimated_score': 1200,
