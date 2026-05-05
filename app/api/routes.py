@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.endpoints.ai import router as ai_router
 from app.api.endpoints.attempts import router as attempts_router
 from app.api.endpoints.entitlements import router as entitlements_router
 from app.api.endpoints.flashcards import router as flashcards_router
@@ -20,6 +21,7 @@ def create_api_router() -> APIRouter:
         tags=['entitlements'],
     )
     router.include_router(users_router, prefix='/users', tags=['users'])
+    router.include_router(ai_router, prefix='/ai', tags=['ai'])
     router.include_router(flashcards_router, prefix='/flashcards', tags=['flashcards'])
     router.include_router(attempts_router, prefix='/attempts', tags=['attempts'])
     router.include_router(

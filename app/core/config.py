@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = None
     gemini_model: str = 'gemini-2.5-flash-lite'
     gemini_image_model: str = 'gemini-2.5-flash-lite'
+    ai_chat_max_messages: int = 16
+    ai_chat_max_content_chars: int = 4000
+    ai_chat_max_output_tokens: int = 900
+    ai_chat_timeout_seconds: int = 45
+    ai_chat_temperature: float = 0.35
     profile_ai_insight_ttl_minutes: int = 1440
     app_timezone: str = 'America/Sao_Paulo'
     abacatepay_api_key: str | None = None
